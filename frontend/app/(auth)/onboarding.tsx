@@ -190,6 +190,18 @@ export default function OnboardingScreen() {
                 </>
               )}
             </TouchableOpacity>
+
+            {/* Logout / Start Over Button */}
+            <TouchableOpacity 
+              style={styles.logoutButton} 
+              onPress={async () => {
+                await supabase.auth.signOut();
+                router.replace('/(auth)/login');
+              }}
+            >
+              <Ionicons name="log-out" size={18} color="#EF4444" />
+              <Text style={styles.logoutText}>Sign Out & Start Over</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -336,5 +348,20 @@ const styles = StyleSheet.create({
   startOverText: {
     color: '#64748B',
     fontSize: 14,
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderRadius: 12,
+    padding: 16,
+    gap: 8,
+    marginTop: 16,
+  },
+  logoutText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#EF4444',
   },
 });
