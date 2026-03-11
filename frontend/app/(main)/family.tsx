@@ -192,12 +192,12 @@ export default function FamilyScreen() {
                       { backgroundColor: getAvatarColor(member.user_id) },
                     ]}>
                       <Text style={styles.memberInitials}>
-                        {getInitials(member.profiles?.name || 'U')}
+                        {getInitials((member as any).profiles?.name || 'U')}
                       </Text>
                     </View>
                     <View style={styles.memberInfo}>
                       <Text style={styles.memberName}>
-                        {member.profiles?.name || 'Unknown'}
+                        {(member as any).profiles?.name || 'Unknown'}
                         {member.user_id === user?.id && ' (You)'}
                       </Text>
                       <Text style={styles.memberRole}>{member.role}</Text>

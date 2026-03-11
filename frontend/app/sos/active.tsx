@@ -15,6 +15,7 @@ import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore, useCircleStore, useSOSStore } from '../../lib/store';
+import { enableSOSMode, disableSOSMode } from '../../lib/locationService';
 
 const COUNTDOWN_SECONDS = 5;
 
@@ -28,7 +29,7 @@ export default function SOSActiveScreen() {
   const [isActive, setIsActive] = useState(false);
   const [isCancelled, setIsCancelled] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const countdownInterval = useRef<NodeJS.Timeout | null>(null);
+  const countdownInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     // Start countdown
@@ -80,6 +81,9 @@ export default function SOSActiveScreen() {
     setIsActive(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     Vibration.vibrate([0, 500, 200, 500]);
+
+    // Enable high-frequency location tracking
+    await enableSOSMode();
 
     try {
       // Get current location
@@ -148,6 +152,9 @@ export default function SOSActiveScreen() {
 
   const resolveSOS = async () => {
     try {
+      // Disable high-frequency tracking
+      await disableSOSMode();
+      
       if (user) {
         await supabase
           .from('sos_events')

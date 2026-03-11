@@ -1,6 +1,5 @@
 import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
@@ -8,41 +7,50 @@ import * as SecureStore from 'expo-secure-store';
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://your-project.supabase.co';
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'your-anon-key';
 
+// Web-safe storage check
+const isWeb = Platform.OS === 'web';
+const hasLocalStorage = isWeb && typeof window !== 'undefined' && window.localStorage;
+
 // Custom storage adapter for Expo
 const ExpoSecureStoreAdapter = {
   getItem: async (key: string): Promise<string | null> => {
     try {
-      if (Platform.OS === 'web') {
-        return localStorage.getItem(key);
+      if (isWeb) {
+        if (hasLocalStorage) {
+          return window.localStorage.getItem(key);
+        }
+        return null;
       }
       return await SecureStore.getItemAsync(key);
     } catch (error) {
-      console.warn('SecureStore getItem error:', error);
-      return await AsyncStorage.getItem(key);
+      console.warn('Storage getItem error:', error);
+      return null;
     }
   },
   setItem: async (key: string, value: string): Promise<void> => {
     try {
-      if (Platform.OS === 'web') {
-        localStorage.setItem(key, value);
+      if (isWeb) {
+        if (hasLocalStorage) {
+          window.localStorage.setItem(key, value);
+        }
         return;
       }
       await SecureStore.setItemAsync(key, value);
     } catch (error) {
-      console.warn('SecureStore setItem error:', error);
-      await AsyncStorage.setItem(key, value);
+      console.warn('Storage setItem error:', error);
     }
   },
   removeItem: async (key: string): Promise<void> => {
     try {
-      if (Platform.OS === 'web') {
-        localStorage.removeItem(key);
+      if (isWeb) {
+        if (hasLocalStorage) {
+          window.localStorage.removeItem(key);
+        }
         return;
       }
       await SecureStore.deleteItemAsync(key);
     } catch (error) {
-      console.warn('SecureStore removeItem error:', error);
-      await AsyncStorage.removeItem(key);
+      console.warn('Storage removeItem error:', error);
     }
   },
 };

@@ -13,12 +13,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
-import * as Battery from 'expo-battery';
 import { useAuthStore, useLocationStore, useCircleStore, usePlacesStore, useSOSStore, useTripStore } from '../../lib/store';
 import { supabase } from '../../lib/supabase';
-import { getInitials, getAvatarColor, getBatteryColor, formatRelativeTime } from '../../utils/helpers';
-import { MapMember, Place, LiveLocation } from '../../types';
+import { getInitials, getAvatarColor, getBatteryColor } from '../../utils/helpers';
+import { MapMember } from '../../types';
+import { useLocationTracking } from '../../hooks/useLocationTracking';
+import TrackingStatusCard from '../../components/TrackingStatusCard';
 
 const { width, height } = Dimensions.get('window');
 
@@ -26,51 +26,49 @@ export default function MapScreen() {
   const router = useRouter();
   const { user, profile } = useAuthStore();
   const { currentCircle, members, setCurrentCircle, setMembers, circles, setCircles } = useCircleStore();
-  const { mapMembers, setMapMembers, setMyLocation } = useLocationStore();
+  const { mapMembers, setMapMembers } = useLocationStore();
   const { places, setPlaces } = usePlacesStore();
-  const { myActivesSOS, setMyActiveSOS } = useSOSStore();
-  const { myActiveTrip, setMyActiveTrip } = useTripStore();
   
   const [isLoading, setIsLoading] = useState(true);
-  const [myCoords, setMyCoords] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [batteryLevel, setBatteryLevel] = useState<number>(100);
+  const [showTrackingCard, setShowTrackingCard] = useState(false);
+
+  // Use the location tracking hook
+  const {
+    isTracking,
+    isForeground,
+    isSOSMode,
+    permissionStatus,
+    backgroundPermissionStatus,
+    lastLocation,
+    lastBatteryLevel,
+    error: trackingError,
+    statusText,
+    isBackgroundAvailable,
+    backgroundAvailabilityReason,
+    startTracking,
+    stopTracking,
+    requestPermissions,
+  } = useLocationTracking(user?.id ?? null, currentCircle?.id ?? null, {
+    autoStart: false, // We'll start manually after loading circles
+    enableBackground: true,
+  });
 
   // Initial setup
   useEffect(() => {
     setupApp();
   }, []);
 
+  // Auto-start tracking when circle is loaded
+  useEffect(() => {
+    if (currentCircle && user && !isTracking && permissionStatus !== 'denied') {
+      startTracking();
+    }
+  }, [currentCircle, user]);
+
   const setupApp = async () => {
     try {
-      // Request location permissions
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Location access is needed for Guardian AI to work.');
-        setIsLoading(false);
-        return;
-      }
-
-      // Get current location
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-      setMyCoords({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      });
-
-      // Get battery level
-      try {
-        const battery = await Battery.getBatteryLevelAsync();
-        setBatteryLevel(Math.round(battery * 100));
-      } catch (e) {
-        // Battery API may not work on web
-        setBatteryLevel(100);
-      }
-
       // Load circles and members
       await loadUserCircles();
-
       setIsLoading(false);
     } catch (error) {
       console.error('Setup error:', error);
@@ -178,14 +176,14 @@ export default function MapScreen() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#6366F1" />
-        <Text style={styles.loadingText}>Loading map...</Text>
+        <Text style={styles.loadingText}>Loading...</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      {/* Map Placeholder for Web */}
+      {/* Map Placeholder */}
       <View style={styles.mapContainer}>
         <View style={styles.mapPlaceholder}>
           <Ionicons name="map" size={64} color="#6366F1" />
@@ -193,16 +191,19 @@ export default function MapScreen() {
           <Text style={styles.mapSubtitle}>
             {Platform.OS === 'web' 
               ? 'Full map available on mobile app' 
-              : 'Loading map...'}
+              : 'Map view'}
           </Text>
-          {myCoords && (
-            <Text style={styles.coordsText}>
-              Your location: {myCoords.latitude.toFixed(4)}, {myCoords.longitude.toFixed(4)}
-            </Text>
+          {lastLocation && (
+            <View style={styles.locationDisplay}>
+              <Ionicons name="location" size={16} color="#10B981" />
+              <Text style={styles.coordsText}>
+                {lastLocation.latitude.toFixed(4)}, {lastLocation.longitude.toFixed(4)}
+              </Text>
+            </View>
           )}
         </View>
 
-        {/* Family Members List */}
+        {/* Family Members Overlay */}
         {mapMembers.length > 0 && (
           <View style={styles.membersOverlay}>
             <Text style={styles.overlayTitle}>Family Members</Text>
@@ -211,12 +212,29 @@ export default function MapScreen() {
                 <View key={member.id} style={styles.memberCard}>
                   <View style={[styles.memberAvatar, { backgroundColor: getAvatarColor(member.user_id) }]}>
                     <Text style={styles.memberInitials}>{getInitials(member.name)}</Text>
+                    {member.user_id === user?.id && (
+                      <View style={[
+                        styles.trackingIndicator,
+                        { backgroundColor: isTracking ? '#10B981' : '#64748B' }
+                      ]} />
+                    )}
                   </View>
-                  <Text style={styles.memberName}>{member.name.split(' ')[0]}</Text>
+                  <Text style={styles.memberName}>
+                    {member.name.split(' ')[0]}
+                    {member.user_id === user?.id && ' (You)'}
+                  </Text>
                   <View style={styles.memberStatus}>
                     <View style={[styles.statusDot, { backgroundColor: member.is_online ? '#10B981' : '#64748B' }]} />
                     <Text style={styles.statusText}>{member.is_online ? 'Online' : 'Offline'}</Text>
                   </View>
+                  {member.battery_level && (
+                    <View style={styles.batteryRow}>
+                      <Ionicons name="battery-half" size={12} color={getBatteryColor(member.battery_level)} />
+                      <Text style={[styles.batteryText, { color: getBatteryColor(member.battery_level) }]}>
+                        {member.battery_level}%
+                      </Text>
+                    </View>
+                  )}
                 </View>
               ))}
             </ScrollView>
@@ -233,11 +251,54 @@ export default function MapScreen() {
             <Ionicons name="chevron-down" size={16} color="#94A3B8" />
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.settingsButton} onPress={() => router.push('/settings')}>
-            <Ionicons name="settings-outline" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
+          <View style={styles.headerButtons}>
+            {/* Tracking Status Button */}
+            <TouchableOpacity 
+              style={[
+                styles.trackingButton,
+                { backgroundColor: isTracking ? 'rgba(16, 185, 129, 0.2)' : 'rgba(100, 116, 139, 0.2)' }
+              ]} 
+              onPress={() => setShowTrackingCard(!showTrackingCard)}
+            >
+              <View style={[
+                styles.trackingDot,
+                { backgroundColor: isTracking ? '#10B981' : '#64748B' }
+              ]} />
+              <Ionicons 
+                name={isTracking ? 'radio' : 'radio-outline'} 
+                size={18} 
+                color={isTracking ? '#10B981' : '#64748B'} 
+              />
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.settingsButton} onPress={() => router.push('/settings')}>
+              <Ionicons name="settings-outline" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
+
+      {/* Tracking Status Card (Expandable) */}
+      {showTrackingCard && (
+        <View style={styles.trackingCardContainer}>
+          <TrackingStatusCard
+            isTracking={isTracking}
+            isForeground={isForeground}
+            isSOSMode={isSOSMode}
+            permissionStatus={permissionStatus}
+            backgroundPermissionStatus={backgroundPermissionStatus}
+            lastLocation={lastLocation}
+            lastBatteryLevel={lastBatteryLevel}
+            error={trackingError}
+            statusText={statusText}
+            isBackgroundAvailable={isBackgroundAvailable}
+            backgroundAvailabilityReason={backgroundAvailabilityReason}
+            onStartTracking={startTracking}
+            onStopTracking={stopTracking}
+            onRequestPermissions={requestPermissions}
+          />
+        </View>
+      )}
 
       {/* Quick Actions */}
       <View style={styles.quickActions}>
@@ -258,13 +319,28 @@ export default function MapScreen() {
 
       {/* Status Bar */}
       <View style={styles.statusBar}>
+        <TouchableOpacity 
+          style={styles.statusItem}
+          onPress={() => setShowTrackingCard(!showTrackingCard)}
+        >
+          <Ionicons 
+            name={isTracking ? 'radio' : 'radio-outline'} 
+            size={16} 
+            color={isTracking ? '#10B981' : '#64748B'} 
+          />
+          <Text style={styles.statusBarText}>
+            {isTracking 
+              ? (isForeground ? 'Sharing' : 'Background') 
+              : 'Paused'}
+          </Text>
+        </TouchableOpacity>
         <View style={styles.statusItem}>
-          <Ionicons name="battery-half" size={16} color={getBatteryColor(batteryLevel)} />
-          <Text style={styles.statusBarText}>{batteryLevel}%</Text>
+          <Ionicons name="battery-half" size={16} color={getBatteryColor(lastBatteryLevel)} />
+          <Text style={styles.statusBarText}>{lastBatteryLevel}%</Text>
         </View>
         <View style={styles.statusItem}>
           <Ionicons name="people" size={16} color="#10B981" />
-          <Text style={styles.statusBarText}>{mapMembers.length} online</Text>
+          <Text style={styles.statusBarText}>{mapMembers.length} members</Text>
         </View>
         {places.length > 0 && (
           <View style={styles.statusItem}>
@@ -313,10 +389,20 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     marginTop: 8,
   },
-  coordsText: {
-    fontSize: 12,
-    color: '#64748B',
+  locationDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 16,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 8,
+  },
+  coordsText: {
+    fontSize: 14,
+    color: '#10B981',
+    fontWeight: '500',
   },
   membersOverlay: {
     position: 'absolute',
@@ -340,7 +426,7 @@ const styles = StyleSheet.create({
     padding: 12,
     marginRight: 12,
     alignItems: 'center',
-    minWidth: 80,
+    minWidth: 90,
   },
   memberAvatar: {
     width: 44,
@@ -349,6 +435,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
+    position: 'relative',
+  },
+  trackingIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#1E293B',
   },
   memberInitials: {
     color: '#FFFFFF',
@@ -360,6 +457,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     marginBottom: 4,
+    textAlign: 'center',
   },
   memberStatus: {
     flexDirection: 'row',
@@ -374,6 +472,16 @@ const styles = StyleSheet.create({
   statusText: {
     color: '#64748B',
     fontSize: 10,
+  },
+  batteryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  batteryText: {
+    fontSize: 10,
+    fontWeight: '500',
   },
   header: {
     position: 'absolute',
@@ -402,6 +510,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  trackingButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  trackingDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
   settingsButton: {
     width: 48,
     height: 48,
@@ -409,6 +537,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(30, 41, 59, 0.95)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  trackingCardContainer: {
+    position: 'absolute',
+    top: 110,
+    left: 16,
+    right: 16,
+    zIndex: 10,
   },
   quickActions: {
     position: 'absolute',
@@ -467,7 +602,8 @@ const styles = StyleSheet.create({
     right: 16,
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 24,
+    gap: 16,
+    flexWrap: 'wrap',
   },
   statusItem: {
     flexDirection: 'row',

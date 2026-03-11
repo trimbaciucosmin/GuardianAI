@@ -14,7 +14,8 @@
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Track family location for safety",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Background tracking for family safety",
-        "NSLocationAlwaysUsageDescription": "Continuous location for emergency alerts"
+        "NSLocationAlwaysUsageDescription": "Continuous location for emergency alerts",
+        "UIBackgroundModes": ["location", "fetch"]
       }
     },
     "android": {
@@ -29,7 +30,10 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
-        "VIBRATE"
+        "FOREGROUND_SERVICE_LOCATION",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED",
+        "WAKE_LOCK"
       ]
     },
     "web": {
@@ -54,7 +58,10 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Allow Guardian AI to track location for family safety",
           "locationAlwaysPermission": "Allow background location for emergency monitoring",
-          "locationWhenInUsePermission": "Allow location access to show family on map"
+          "locationWhenInUsePermission": "Allow location access to show family on map",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
       ]
     ],
