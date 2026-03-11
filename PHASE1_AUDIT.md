@@ -265,9 +265,9 @@ If not configured, login/signup shows alert asking you to add credentials.
 
 ```env
 # EXISTING (DO NOT MODIFY)
-EXPO_TUNNEL_SUBDOMAIN=family-circle-ai
-EXPO_PACKAGER_HOSTNAME=https://family-circle-ai.preview.emergentagent.com
-EXPO_PUBLIC_BACKEND_URL=https://family-circle-ai.preview.emergentagent.com
+EXPO_TUNNEL_SUBDOMAIN=guardian-realtime
+EXPO_PACKAGER_HOSTNAME=https://guardian-realtime.preview.emergentagent.com
+EXPO_PUBLIC_BACKEND_URL=https://guardian-realtime.preview.emergentagent.com
 EXPO_USE_FAST_RESOLVER="1"
 METRO_CACHE_ROOT=/app/frontend/.metro-cache
 

@@ -11,17 +11,133 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore, useCircleStore, usePlacesStore } from '../../lib/store';
+import { useAuthStore, useCircleStore, usePlacesStore, useLocationStore, useSOSStore, useTripStore, useRealtimeStore } from '../../lib/store';
 import { supabase } from '../../lib/supabase';
-import { CircleMember, FamilyCircle, Place } from '../../types';
-import { getInitials, getAvatarColor, formatRelativeTime, getPlaceIcon, getPlaceColor } from '../../utils/helpers';
+import { CircleMember, FamilyCircle, Place, LiveLocation, SOSEvent, MonitoredTrip } from '../../types';
+import { getInitials, getAvatarColor, formatRelativeTime, getPlaceIcon, getPlaceColor, getBatteryColor } from '../../utils/helpers';
+import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription';
+
+interface MemberWithStatus extends CircleMember {
+  profiles?: {
+    name: string;
+    avatar_url?: string;
+    role: string;
+  };
+  liveLocation?: LiveLocation;
+  activeSOSEvent?: SOSEvent;
+  activeTrip?: MonitoredTrip;
+}
 
 export default function FamilyScreen() {
   const router = useRouter();
   const { user, profile } = useAuthStore();
   const { circles, currentCircle, members, setCircles, setCurrentCircle, setMembers } = useCircleStore();
   const { places, setPlaces } = usePlacesStore();
+  const { mapMembers, updateMapMember } = useLocationStore();
+  const { activeSOSEvents, setActiveSOSEvents } = useSOSStore();
+  const { activeTrips, setActiveTrips } = useTripStore();
+  const { setGlobalSOSEvent } = useRealtimeStore();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [membersWithStatus, setMembersWithStatus] = useState<MemberWithStatus[]>([]);
+
+  // Realtime subscription
+  const {
+    isConnected,
+    connectionError,
+    lastLocationUpdate,
+    lastSOSEvent,
+    lastTripUpdate,
+    lastGeofenceEvent,
+  } = useRealtimeSubscription(currentCircle?.id || null);
+
+  // Handle realtime location updates - update member status
+  useEffect(() => {
+    if (lastLocationUpdate?.data) {
+      const loc = lastLocationUpdate.data as LiveLocation;
+      const isOnline = new Date().getTime() - new Date(loc.timestamp).getTime() < 5 * 60 * 1000;
+      
+      // Update member with status
+      setMembersWithStatus(prev => prev.map(member => {
+        if (member.user_id === loc.user_id) {
+          return {
+            ...member,
+            liveLocation: loc,
+          };
+        }
+        return member;
+      }));
+
+      // Also update map members
+      updateMapMember(loc.user_id, {
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        battery_level: loc.battery_level,
+        is_moving: loc.is_moving,
+        is_online: isOnline,
+        last_seen: loc.timestamp,
+      });
+    }
+  }, [lastLocationUpdate]);
+
+  // Handle realtime SOS events
+  useEffect(() => {
+    if (lastSOSEvent?.data) {
+      const sosEvent = lastSOSEvent.data as SOSEvent;
+      
+      if (sosEvent.status === 'active') {
+        // Update member with active SOS
+        setMembersWithStatus(prev => prev.map(member => {
+          if (member.user_id === sosEvent.user_id) {
+            return { ...member, activeSOSEvent: sosEvent };
+          }
+          return member;
+        }));
+        
+        // Show global SOS if not current user
+        if (sosEvent.user_id !== user?.id) {
+          const member = members.find(m => m.user_id === sosEvent.user_id);
+          const memberName = (member as any)?.profiles?.name || 'Family Member';
+          setGlobalSOSEvent(sosEvent, memberName);
+        }
+
+        setActiveSOSEvents([sosEvent, ...activeSOSEvents.filter(e => e.id !== sosEvent.id)]);
+      } else {
+        // Clear SOS from member
+        setMembersWithStatus(prev => prev.map(member => {
+          if (member.user_id === sosEvent.user_id) {
+            return { ...member, activeSOSEvent: undefined };
+          }
+          return member;
+        }));
+        setActiveSOSEvents(activeSOSEvents.filter(e => e.id !== sosEvent.id));
+      }
+    }
+  }, [lastSOSEvent]);
+
+  // Handle realtime trip updates
+  useEffect(() => {
+    if (lastTripUpdate?.data) {
+      const trip = lastTripUpdate.data as MonitoredTrip;
+      
+      if (trip.status === 'active') {
+        setMembersWithStatus(prev => prev.map(member => {
+          if (member.user_id === trip.user_id) {
+            return { ...member, activeTrip: trip };
+          }
+          return member;
+        }));
+        setActiveTrips([trip, ...activeTrips.filter(t => t.id !== trip.id)]);
+      } else {
+        setMembersWithStatus(prev => prev.map(member => {
+          if (member.user_id === trip.user_id) {
+            return { ...member, activeTrip: undefined };
+          }
+          return member;
+        }));
+        setActiveTrips(activeTrips.filter(t => t.id !== trip.id));
+      }
+    }
+  }, [lastTripUpdate]);
 
   useEffect(() => {
     loadData();
@@ -46,7 +162,7 @@ export default function FamilyScreen() {
         }
       }
 
-      // Load members of current circle
+      // Load members of current circle with live locations
       if (currentCircle) {
         const { data: membersData } = await supabase
           .from('circle_members')
@@ -55,6 +171,45 @@ export default function FamilyScreen() {
 
         if (membersData) {
           setMembers(membersData);
+          
+          // Load live locations for members
+          const { data: locationsData } = await supabase
+            .from('live_locations')
+            .select('*')
+            .eq('circle_id', currentCircle.id);
+
+          // Load active SOS events
+          const { data: sosData } = await supabase
+            .from('sos_events')
+            .select('*')
+            .eq('circle_id', currentCircle.id)
+            .eq('status', 'active');
+
+          // Load active trips
+          const { data: tripsData } = await supabase
+            .from('monitored_trips')
+            .select('*')
+            .eq('circle_id', currentCircle.id)
+            .eq('status', 'active');
+
+          if (sosData) setActiveSOSEvents(sosData);
+          if (tripsData) setActiveTrips(tripsData);
+
+          // Combine member data with live locations and status
+          const enrichedMembers = membersData.map((member: any) => {
+            const location = locationsData?.find((l: LiveLocation) => l.user_id === member.user_id);
+            const sosEvent = sosData?.find((s: SOSEvent) => s.user_id === member.user_id && s.status === 'active');
+            const trip = tripsData?.find((t: MonitoredTrip) => t.user_id === member.user_id && t.status === 'active');
+            
+            return {
+              ...member,
+              liveLocation: location,
+              activeSOSEvent: sosEvent,
+              activeTrip: trip,
+            } as MemberWithStatus;
+          });
+          
+          setMembersWithStatus(enrichedMembers);
         }
 
         // Load places
@@ -86,11 +241,33 @@ export default function FamilyScreen() {
     }
   };
 
+  const getMemberOnlineStatus = (member: MemberWithStatus): { isOnline: boolean; lastSeen: string } => {
+    if (member.liveLocation) {
+      const lastSeenTime = new Date(member.liveLocation.timestamp).getTime();
+      const now = new Date().getTime();
+      const isOnline = now - lastSeenTime < 5 * 60 * 1000; // 5 minutes
+      return { isOnline, lastSeen: member.liveLocation.timestamp };
+    }
+    return { isOnline: false, lastSeen: member.joined_at };
+  };
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top']} data-testid="family-screen">
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Family</Text>
+        <View style={styles.headerLeft}>
+          <Text style={styles.title}>Family</Text>
+          {/* Realtime status */}
+          <View style={[
+            styles.realtimeIndicator,
+            { backgroundColor: isConnected ? 'rgba(16, 185, 129, 0.2)' : 'rgba(100, 116, 139, 0.2)' }
+          ]}>
+            <View style={[
+              styles.realtimeDot,
+              { backgroundColor: isConnected ? '#10B981' : '#64748B' }
+            ]} />
+          </View>
+        </View>
         <TouchableOpacity style={styles.addButton} onPress={() => router.push('/circle/create')}>
           <Ionicons name="add" size={24} color="#FFFFFF" />
         </TouchableOpacity>
@@ -120,6 +297,7 @@ export default function FamilyScreen() {
                     currentCircle?.id === circle.id && styles.circleCardActive,
                   ]}
                   onPress={() => setCurrentCircle(circle)}
+                  data-testid={`circle-${circle.id}`}
                 >
                   <View style={styles.circleIcon}>
                     <Ionicons name="shield" size={24} color="#6366F1" />
@@ -130,6 +308,7 @@ export default function FamilyScreen() {
               <TouchableOpacity
                 style={styles.addCircleCard}
                 onPress={() => router.push('/circle/join')}
+                data-testid="join-circle-btn"
               >
                 <Ionicons name="add-circle-outline" size={32} color="#64748B" />
                 <Text style={styles.addCircleText}>Join Circle</Text>
@@ -147,6 +326,7 @@ export default function FamilyScreen() {
               <TouchableOpacity
                 style={styles.createButton}
                 onPress={() => router.push('/circle/create')}
+                data-testid="create-circle-btn"
               >
                 <Ionicons name="add" size={20} color="#FFFFFF" />
                 <Text style={styles.createButtonText}>Create Circle</Text>
@@ -167,7 +347,7 @@ export default function FamilyScreen() {
           <>
             {/* Invite Code */}
             <View style={styles.section}>
-              <TouchableOpacity style={styles.inviteCard} onPress={copyInviteCode}>
+              <TouchableOpacity style={styles.inviteCard} onPress={copyInviteCode} data-testid="invite-code-card">
                 <View style={styles.inviteContent}>
                   <Ionicons name="qr-code" size={24} color="#6366F1" />
                   <View style={styles.inviteText}>
@@ -182,32 +362,104 @@ export default function FamilyScreen() {
             {/* Members */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Members ({members.length})</Text>
+                <Text style={styles.sectionTitle}>Members ({membersWithStatus.length})</Text>
+                <Text style={styles.onlineCount}>
+                  {membersWithStatus.filter(m => getMemberOnlineStatus(m).isOnline).length} online
+                </Text>
               </View>
               <View style={styles.membersList}>
-                {members.map((member) => (
-                  <View key={member.id} style={styles.memberCard}>
-                    <View style={[
-                      styles.memberAvatar,
-                      { backgroundColor: getAvatarColor(member.user_id) },
-                    ]}>
-                      <Text style={styles.memberInitials}>
-                        {getInitials((member as any).profiles?.name || 'U')}
-                      </Text>
+                {membersWithStatus.map((member) => {
+                  const { isOnline, lastSeen } = getMemberOnlineStatus(member);
+                  const isCurrentUser = member.user_id === user?.id;
+                  
+                  return (
+                    <View key={member.id} style={styles.memberCard} data-testid={`member-${member.user_id}`}>
+                      {/* Avatar with status indicators */}
+                      <View style={styles.memberAvatarContainer}>
+                        <View style={[
+                          styles.memberAvatar,
+                          { backgroundColor: getAvatarColor(member.user_id) },
+                        ]}>
+                          <Text style={styles.memberInitials}>
+                            {getInitials((member as any).profiles?.name || 'U')}
+                          </Text>
+                        </View>
+                        {/* Online indicator */}
+                        <View style={[
+                          styles.onlineIndicator,
+                          { backgroundColor: isOnline ? '#10B981' : '#64748B' }
+                        ]} />
+                        {/* SOS indicator */}
+                        {member.activeSOSEvent && (
+                          <View style={styles.sosIndicator}>
+                            <Ionicons name="alert" size={10} color="#FFFFFF" />
+                          </View>
+                        )}
+                      </View>
+
+                      <View style={styles.memberInfo}>
+                        <View style={styles.memberNameRow}>
+                          <Text style={styles.memberName}>
+                            {(member as any).profiles?.name || 'Unknown'}
+                            {isCurrentUser && ' (You)'}
+                          </Text>
+                          {/* Active trip indicator */}
+                          {member.activeTrip && (
+                            <View style={styles.tripIndicator}>
+                              <Ionicons name="navigate" size={10} color="#10B981" />
+                              <Text style={styles.tripIndicatorText}>Trip</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={styles.memberRole}>{member.role}</Text>
+                        
+                        {/* Location and status info */}
+                        <View style={styles.memberStatusRow}>
+                          <View style={[styles.statusBadge, { backgroundColor: isOnline ? 'rgba(16, 185, 129, 0.1)' : 'rgba(100, 116, 139, 0.1)' }]}>
+                            <View style={[styles.statusDotSmall, { backgroundColor: isOnline ? '#10B981' : '#64748B' }]} />
+                            <Text style={[styles.statusBadgeText, { color: isOnline ? '#10B981' : '#64748B' }]}>
+                              {isOnline ? 'Online' : 'Offline'}
+                            </Text>
+                          </View>
+                          <Text style={styles.lastSeenText}>
+                            {isOnline ? 'Now' : formatRelativeTime(lastSeen)}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Right side - battery and movement */}
+                      <View style={styles.memberRightInfo}>
+                        {member.liveLocation?.battery_level !== undefined && (
+                          <View style={styles.batteryInfo}>
+                            <Ionicons 
+                              name="battery-half" 
+                              size={14} 
+                              color={getBatteryColor(member.liveLocation.battery_level)} 
+                            />
+                            <Text style={[
+                              styles.batteryText, 
+                              { color: getBatteryColor(member.liveLocation.battery_level) }
+                            ]}>
+                              {member.liveLocation.battery_level}%
+                            </Text>
+                          </View>
+                        )}
+                        {member.liveLocation?.is_moving && (
+                          <View style={styles.movingBadge}>
+                            <Ionicons name="walk" size={12} color="#6366F1" />
+                          </View>
+                        )}
+                        {/* SOS Alert Badge */}
+                        {member.activeSOSEvent && (
+                          <View style={styles.sosAlertBadge}>
+                            <Ionicons name="alert" size={12} color="#FFFFFF" />
+                            <Text style={styles.sosAlertText}>SOS</Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
-                    <View style={styles.memberInfo}>
-                      <Text style={styles.memberName}>
-                        {(member as any).profiles?.name || 'Unknown'}
-                        {member.user_id === user?.id && ' (You)'}
-                      </Text>
-                      <Text style={styles.memberRole}>{member.role}</Text>
-                    </View>
-                    <View style={styles.memberStatus}>
-                      <View style={styles.statusDot} />
-                      <Text style={styles.statusText}>Online</Text>
-                    </View>
-                  </View>
-                ))}
+                  );
+                })}
               </View>
             </View>
 
@@ -226,6 +478,7 @@ export default function FamilyScreen() {
                       key={place.id}
                       style={styles.placeCard}
                       onPress={() => router.push(`/place/${place.id}`)}
+                      data-testid={`place-${place.id}`}
                     >
                       <View style={[
                         styles.placeIcon,
@@ -249,6 +502,7 @@ export default function FamilyScreen() {
                 <TouchableOpacity
                   style={styles.addPlaceCard}
                   onPress={() => router.push('/place/create')}
+                  data-testid="add-place-btn"
                 >
                   <Ionicons name="location-outline" size={24} color="#64748B" />
                   <Text style={styles.addPlaceText}>Add your first place</Text>
@@ -274,10 +528,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
   },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   title: {
     fontSize: 28,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  realtimeIndicator: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  realtimeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   addButton: {
     width: 44,
@@ -305,6 +576,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#94A3B8',
     marginBottom: 12,
+  },
+  onlineCount: {
+    fontSize: 12,
+    color: '#10B981',
+    fontWeight: '600',
   },
   circlesRow: {
     flexDirection: 'row',
@@ -451,46 +727,139 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
   },
+  memberAvatarContainer: {
+    position: 'relative',
+  },
   memberAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
   },
   memberInitials: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
+  },
+  onlineIndicator: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: '#1E293B',
+  },
+  sosIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#DC2626',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#1E293B',
   },
   memberInfo: {
     flex: 1,
     marginLeft: 12,
+  },
+  memberNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   memberName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
   },
+  tripIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    gap: 4,
+  },
+  tripIndicatorText: {
+    fontSize: 10,
+    color: '#10B981',
+    fontWeight: '600',
+  },
   memberRole: {
     fontSize: 12,
     color: '#64748B',
     textTransform: 'capitalize',
+    marginTop: 2,
   },
-  memberStatus: {
+  memberStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 6,
+    gap: 8,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    gap: 4,
+  },
+  statusDotSmall: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  lastSeenText: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  memberRightInfo: {
+    alignItems: 'flex-end',
     gap: 6,
   },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#10B981',
+  batteryInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
-  statusText: {
+  batteryText: {
     fontSize: 12,
-    color: '#10B981',
+    fontWeight: '600',
+  },
+  movingBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sosAlertBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  sosAlertText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
   },
   placesList: {
     gap: 8,

@@ -55,6 +55,7 @@ interface LocationState {
   setMyLocation: (location: LiveLocation | null) => void;
   updateMemberLocation: (userId: string, location: LiveLocation) => void;
   setMapMembers: (members: MapMember[]) => void;
+  updateMapMember: (userId: string, updates: Partial<MapMember>) => void;
   clearLocations: () => void;
 }
 
@@ -70,6 +71,12 @@ export const useLocationStore = create<LocationState>((set) => ({
       return { memberLocations: newMap };
     }),
   setMapMembers: (mapMembers) => set({ mapMembers }),
+  updateMapMember: (userId: string, updates: Partial<MapMember>) =>
+    set((state) => ({
+      mapMembers: state.mapMembers.map((m) =>
+        m.user_id === userId ? { ...m, ...updates } : m
+      ),
+    })),
   clearLocations: () => set({ myLocation: null, memberLocations: new Map(), mapMembers: [] }),
 }));
 
@@ -213,4 +220,40 @@ export const useDeviceStore = create<DeviceState>((set) => ({
       newMap.set(userId, status);
       return { memberDeviceStatus: newMap };
     }),
+}));
+
+// Realtime Connection State Store
+interface RealtimeState {
+  isConnected: boolean;
+  connectionError: string | null;
+  globalSOSEvent: SOSEvent | null;
+  sosEventMemberName: string | null;
+  dismissedSOSIds: Set<string>;
+  setConnectionState: (connected: boolean, error: string | null) => void;
+  setGlobalSOSEvent: (event: SOSEvent | null, memberName?: string | null) => void;
+  dismissSOS: (sosId: string) => void;
+  clearDismissedSOS: () => void;
+}
+
+export const useRealtimeStore = create<RealtimeState>((set, get) => ({
+  isConnected: false,
+  connectionError: null,
+  globalSOSEvent: null,
+  sosEventMemberName: null,
+  dismissedSOSIds: new Set(),
+  setConnectionState: (isConnected, connectionError) => set({ isConnected, connectionError }),
+  setGlobalSOSEvent: (globalSOSEvent, sosEventMemberName = null) => {
+    // Don't show if already dismissed
+    if (globalSOSEvent && get().dismissedSOSIds.has(globalSOSEvent.id)) {
+      return;
+    }
+    set({ globalSOSEvent, sosEventMemberName });
+  },
+  dismissSOS: (sosId) =>
+    set((state) => {
+      const newSet = new Set(state.dismissedSOSIds);
+      newSet.add(sosId);
+      return { dismissedSOSIds: newSet, globalSOSEvent: null, sosEventMemberName: null };
+    }),
+  clearDismissedSOS: () => set({ dismissedSOSIds: new Set() }),
 }));

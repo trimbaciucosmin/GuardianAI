@@ -13,11 +13,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore, useLocationStore, useCircleStore, usePlacesStore, useSOSStore, useTripStore } from '../../lib/store';
+import { useAuthStore, useLocationStore, useCircleStore, usePlacesStore, useSOSStore, useTripStore, useRealtimeStore } from '../../lib/store';
 import { supabase } from '../../lib/supabase';
-import { getInitials, getAvatarColor, getBatteryColor } from '../../utils/helpers';
-import { MapMember } from '../../types';
+import { getInitials, getAvatarColor, getBatteryColor, formatRelativeTime } from '../../utils/helpers';
+import { MapMember, LiveLocation } from '../../types';
 import { useLocationTracking } from '../../hooks/useLocationTracking';
+import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription';
 import TrackingStatusCard from '../../components/TrackingStatusCard';
 
 const { width, height } = Dimensions.get('window');
@@ -26,11 +27,23 @@ export default function MapScreen() {
   const router = useRouter();
   const { user, profile } = useAuthStore();
   const { currentCircle, members, setCurrentCircle, setMembers, circles, setCircles } = useCircleStore();
-  const { mapMembers, setMapMembers } = useLocationStore();
+  const { mapMembers, setMapMembers, updateMapMember } = useLocationStore();
   const { places, setPlaces } = usePlacesStore();
+  const { activeSOSEvents, setActiveSOSEvents } = useSOSStore();
+  const { activeTrips, setActiveTrips } = useTripStore();
+  const { setGlobalSOSEvent } = useRealtimeStore();
   
   const [isLoading, setIsLoading] = useState(true);
   const [showTrackingCard, setShowTrackingCard] = useState(false);
+
+  // Realtime subscription
+  const {
+    isConnected: realtimeConnected,
+    connectionError: realtimeError,
+    lastLocationUpdate,
+    lastSOSEvent,
+    lastTripUpdate,
+  } = useRealtimeSubscription(currentCircle?.id || null);
 
   // Use the location tracking hook
   const {
@@ -49,9 +62,58 @@ export default function MapScreen() {
     stopTracking,
     requestPermissions,
   } = useLocationTracking(user?.id ?? null, currentCircle?.id ?? null, {
-    autoStart: false, // We'll start manually after loading circles
+    autoStart: false,
     enableBackground: true,
   });
+
+  // Handle realtime location updates
+  useEffect(() => {
+    if (lastLocationUpdate?.data) {
+      const loc = lastLocationUpdate.data as LiveLocation;
+      const isOnline = new Date().getTime() - new Date(loc.timestamp).getTime() < 5 * 60 * 1000;
+      
+      // Update the specific member's location on the map
+      updateMapMember(loc.user_id, {
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        battery_level: loc.battery_level,
+        is_moving: loc.is_moving,
+        is_online: isOnline,
+        last_seen: loc.timestamp,
+      });
+    }
+  }, [lastLocationUpdate]);
+
+  // Handle realtime SOS events - show global overlay for family SOS
+  useEffect(() => {
+    if (lastSOSEvent?.data) {
+      const sosEvent = lastSOSEvent.data;
+      if (sosEvent.status === 'active' && sosEvent.user_id !== user?.id) {
+        // Find member name
+        const member = members.find(m => m.user_id === sosEvent.user_id);
+        const memberName = (member as any)?.profiles?.name || 'Family Member';
+        setGlobalSOSEvent(sosEvent, memberName);
+        
+        // Update active SOS events
+        setActiveSOSEvents([sosEvent, ...activeSOSEvents.filter(e => e.id !== sosEvent.id)]);
+      } else if (sosEvent.status === 'cancelled' || sosEvent.status === 'resolved') {
+        // Clear if resolved
+        setActiveSOSEvents(activeSOSEvents.filter(e => e.id !== sosEvent.id));
+      }
+    }
+  }, [lastSOSEvent]);
+
+  // Handle realtime trip updates
+  useEffect(() => {
+    if (lastTripUpdate?.data) {
+      const trip = lastTripUpdate.data;
+      if (trip.status === 'active') {
+        setActiveTrips([trip, ...activeTrips.filter(t => t.id !== trip.id)]);
+      } else {
+        setActiveTrips(activeTrips.filter(t => t.id !== trip.id));
+      }
+    }
+  }, [lastTripUpdate]);
 
   // Initial setup
   useEffect(() => {
@@ -67,7 +129,6 @@ export default function MapScreen() {
 
   const setupApp = async () => {
     try {
-      // Load circles and members
       await loadUserCircles();
       setIsLoading(false);
     } catch (error) {
@@ -80,13 +141,9 @@ export default function MapScreen() {
     if (!user) return;
 
     try {
-      // Get user's circles
       const { data: memberData, error: memberError } = await supabase
         .from('circle_members')
-        .select(`
-          *,
-          family_circles (*)
-        `)
+        .select(`*, family_circles (*)`)
         .eq('user_id', user.id);
 
       if (memberError) {
@@ -98,7 +155,6 @@ export default function MapScreen() {
         const userCircles = memberData.map((m: any) => m.family_circles).filter(Boolean);
         setCircles(userCircles);
         
-        // Set first circle as current
         if (userCircles.length > 0) {
           setCurrentCircle(userCircles[0]);
           await loadCircleData(userCircles[0].id);
@@ -114,10 +170,7 @@ export default function MapScreen() {
       // Load members with profiles
       const { data: membersData, error: membersError } = await supabase
         .from('circle_members')
-        .select(`
-          *,
-          profiles (*)
-        `)
+        .select(`*, profiles (*)`)
         .eq('circle_id', circleId);
 
       if (!membersError && membersData) {
@@ -137,10 +190,7 @@ export default function MapScreen() {
       // Load live locations
       const { data: locationsData, error: locationsError } = await supabase
         .from('live_locations')
-        .select(`
-          *,
-          profiles (*)
-        `)
+        .select(`*, profiles (*)`)
         .eq('circle_id', circleId);
 
       if (!locationsError && locationsData) {
@@ -158,6 +208,28 @@ export default function MapScreen() {
           last_seen: loc.timestamp,
         }));
         setMapMembers(mapMembersData);
+      }
+
+      // Load active SOS events
+      const { data: sosData } = await supabase
+        .from('sos_events')
+        .select('*')
+        .eq('circle_id', circleId)
+        .eq('status', 'active');
+
+      if (sosData) {
+        setActiveSOSEvents(sosData);
+      }
+
+      // Load active trips
+      const { data: tripsData } = await supabase
+        .from('monitored_trips')
+        .select('*')
+        .eq('circle_id', circleId)
+        .eq('status', 'active');
+
+      if (tripsData) {
+        setActiveTrips(tripsData);
       }
     } catch (error) {
       console.error('Load circle data error:', error);
@@ -201,7 +273,44 @@ export default function MapScreen() {
               </Text>
             </View>
           )}
+          
+          {/* Realtime Connection Status */}
+          <View style={[
+            styles.realtimeStatus, 
+            { backgroundColor: realtimeConnected ? 'rgba(16, 185, 129, 0.2)' : 'rgba(220, 38, 38, 0.2)' }
+          ]}>
+            <View style={[
+              styles.realtimeDot, 
+              { backgroundColor: realtimeConnected ? '#10B981' : '#DC2626' }
+            ]} />
+            <Text style={[
+              styles.realtimeText, 
+              { color: realtimeConnected ? '#10B981' : '#DC2626' }
+            ]}>
+              {realtimeConnected ? 'Live Updates Active' : realtimeError || 'Connecting...'}
+            </Text>
+          </View>
         </View>
+
+        {/* Active SOS Alert Banner */}
+        {activeSOSEvents.length > 0 && (
+          <View style={styles.sosBanner}>
+            <Ionicons name="alert" size={20} color="#FFFFFF" />
+            <Text style={styles.sosBannerText}>
+              {activeSOSEvents.length} Active SOS Alert{activeSOSEvents.length > 1 ? 's' : ''}
+            </Text>
+          </View>
+        )}
+
+        {/* Active Trips Banner */}
+        {activeTrips.length > 0 && (
+          <View style={styles.tripBanner}>
+            <Ionicons name="navigate" size={18} color="#FFFFFF" />
+            <Text style={styles.tripBannerText}>
+              {activeTrips.length} Active Trip{activeTrips.length > 1 ? 's' : ''}
+            </Text>
+          </View>
+        )}
 
         {/* Family Members Overlay */}
         {mapMembers.length > 0 && (
@@ -209,7 +318,7 @@ export default function MapScreen() {
             <Text style={styles.overlayTitle}>Family Members</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               {mapMembers.map((member) => (
-                <View key={member.id} style={styles.memberCard}>
+                <View key={member.id} style={styles.memberCard} data-testid={`member-card-${member.user_id}`}>
                   <View style={[styles.memberAvatar, { backgroundColor: getAvatarColor(member.user_id) }]}>
                     <Text style={styles.memberInitials}>{getInitials(member.name)}</Text>
                     {member.user_id === user?.id && (
@@ -218,6 +327,11 @@ export default function MapScreen() {
                         { backgroundColor: isTracking ? '#10B981' : '#64748B' }
                       ]} />
                     )}
+                    {/* Online indicator */}
+                    <View style={[
+                      styles.onlineIndicator,
+                      { backgroundColor: member.is_online ? '#10B981' : '#64748B' }
+                    ]} />
                   </View>
                   <Text style={styles.memberName}>
                     {member.name.split(' ')[0]}
@@ -227,12 +341,23 @@ export default function MapScreen() {
                     <View style={[styles.statusDot, { backgroundColor: member.is_online ? '#10B981' : '#64748B' }]} />
                     <Text style={styles.statusText}>{member.is_online ? 'Online' : 'Offline'}</Text>
                   </View>
-                  {member.battery_level && (
+                  {/* Last seen */}
+                  <Text style={styles.lastSeenText}>
+                    {member.is_online ? 'Now' : formatRelativeTime(member.last_seen)}
+                  </Text>
+                  {member.battery_level !== undefined && (
                     <View style={styles.batteryRow}>
                       <Ionicons name="battery-half" size={12} color={getBatteryColor(member.battery_level)} />
                       <Text style={[styles.batteryText, { color: getBatteryColor(member.battery_level) }]}>
                         {member.battery_level}%
                       </Text>
+                    </View>
+                  )}
+                  {/* Moving indicator */}
+                  {member.is_moving && (
+                    <View style={styles.movingBadge}>
+                      <Ionicons name="walk" size={10} color="#6366F1" />
+                      <Text style={styles.movingText}>Moving</Text>
                     </View>
                   )}
                 </View>
@@ -252,6 +377,17 @@ export default function MapScreen() {
           </TouchableOpacity>
           
           <View style={styles.headerButtons}>
+            {/* Realtime Status Indicator */}
+            <View style={[
+              styles.realtimeIndicator,
+              { backgroundColor: realtimeConnected ? 'rgba(16, 185, 129, 0.2)' : 'rgba(220, 38, 38, 0.2)' }
+            ]}>
+              <View style={[
+                styles.realtimePulse,
+                { backgroundColor: realtimeConnected ? '#10B981' : '#DC2626' }
+              ]} />
+            </View>
+            
             {/* Tracking Status Button */}
             <TouchableOpacity 
               style={[
@@ -259,6 +395,7 @@ export default function MapScreen() {
                 { backgroundColor: isTracking ? 'rgba(16, 185, 129, 0.2)' : 'rgba(100, 116, 139, 0.2)' }
               ]} 
               onPress={() => setShowTrackingCard(!showTrackingCard)}
+              data-testid="tracking-status-btn"
             >
               <View style={[
                 styles.trackingDot,
@@ -303,7 +440,7 @@ export default function MapScreen() {
       {/* Quick Actions */}
       <View style={styles.quickActions}>
         {/* SOS Button */}
-        <TouchableOpacity style={styles.sosButton} onPress={triggerSOS}>
+        <TouchableOpacity style={styles.sosButton} onPress={triggerSOS} data-testid="sos-btn">
           <View style={styles.sosButtonInner}>
             <Ionicons name="alert" size={28} color="#FFFFFF" />
             <Text style={styles.sosText}>SOS</Text>
@@ -311,7 +448,7 @@ export default function MapScreen() {
         </TouchableOpacity>
 
         {/* Trip Button */}
-        <TouchableOpacity style={styles.tripButton} onPress={startTrip}>
+        <TouchableOpacity style={styles.tripButton} onPress={startTrip} data-testid="start-trip-btn">
           <Ionicons name="navigate" size={24} color="#FFFFFF" />
           <Text style={styles.tripText}>I'm Going Home</Text>
         </TouchableOpacity>
@@ -404,6 +541,62 @@ const styles = StyleSheet.create({
     color: '#10B981',
     fontWeight: '500',
   },
+  realtimeStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 6,
+  },
+  realtimeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  realtimeText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  sosBanner: {
+    position: 'absolute',
+    top: 120,
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#DC2626',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  sosBannerText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  tripBanner: {
+    position: 'absolute',
+    top: 170,
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#10B981',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  tripBannerText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 13,
+  },
   membersOverlay: {
     position: 'absolute',
     bottom: 200,
@@ -426,7 +619,7 @@ const styles = StyleSheet.create({
     padding: 12,
     marginRight: 12,
     alignItems: 'center',
-    minWidth: 90,
+    minWidth: 100,
   },
   memberAvatar: {
     width: 44,
@@ -444,6 +637,16 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#1E293B',
+  },
+  onlineIndicator: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     borderWidth: 2,
     borderColor: '#1E293B',
   },
@@ -473,6 +676,11 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontSize: 10,
   },
+  lastSeenText: {
+    color: '#64748B',
+    fontSize: 9,
+    marginTop: 2,
+  },
   batteryRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -482,6 +690,21 @@ const styles = StyleSheet.create({
   batteryText: {
     fontSize: 10,
     fontWeight: '500',
+  },
+  movingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginTop: 4,
+    gap: 2,
+  },
+  movingText: {
+    color: '#6366F1',
+    fontSize: 9,
+    fontWeight: '600',
   },
   header: {
     position: 'absolute',
@@ -512,7 +735,20 @@ const styles = StyleSheet.create({
   },
   headerButtons: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
+  },
+  realtimeIndicator: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  realtimePulse: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   trackingButton: {
     width: 48,
