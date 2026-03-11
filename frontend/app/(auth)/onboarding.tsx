@@ -96,6 +96,18 @@ export default function OnboardingScreen() {
             <Text style={styles.subtitle}>Tell us about yourself</Text>
           </View>
 
+          {/* Logout/Start Over Button */}
+          <TouchableOpacity 
+            style={styles.startOverButton} 
+            onPress={async () => {
+              await supabase.auth.signOut();
+              router.replace('/(auth)/login');
+            }}
+          >
+            <Ionicons name="refresh" size={16} color="#64748B" />
+            <Text style={styles.startOverText}>Start Over / Different Account</Text>
+          </TouchableOpacity>
+
           {/* Form */}
           <View style={styles.form}>
             <View style={styles.inputContainer}>
@@ -312,5 +324,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  startOverButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 6,
+    marginBottom: 16,
+  },
+  startOverText: {
+    color: '#64748B',
+    fontSize: 14,
   },
 });
