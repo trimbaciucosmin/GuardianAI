@@ -70,7 +70,23 @@ export default function OnboardingScreen() {
       router.replace('/(main)/map');
     } catch (error: any) {
       console.error('Onboarding error:', error);
-      Alert.alert('Error', error.message || 'Failed to save profile');
+      
+      // If foreign key error, the user doesn't exist - auto logout
+      if (error.code === '23503') {
+        Alert.alert(
+          'Session Expired',
+          'Your session is invalid. Please sign up again.',
+          [{
+            text: 'OK',
+            onPress: async () => {
+              await supabase.auth.signOut();
+              router.replace('/(auth)/login');
+            }
+          }]
+        );
+      } else {
+        Alert.alert('Error', error.message || 'Failed to save profile');
+      }
     } finally {
       setIsLoading(false);
     }
