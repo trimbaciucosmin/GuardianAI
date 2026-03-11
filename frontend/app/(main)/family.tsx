@@ -165,12 +165,21 @@ export default function FamilyScreen() {
       // Load members of current circle with live locations
       if (currentCircle) {
         const { data: membersData } = await supabase
-          .from('circle_members')
-          .select(`*, profiles (*)`)
-          .eq('circle_id', currentCircle.id);
+          .rpc('get_circle_members', { p_circle_id: currentCircle.id });
 
         if (membersData) {
-          setMembers(membersData);
+          // Fetch profiles for members
+          const userIds = membersData.map((m: any) => m.user_id);
+          const { data: profilesData } = await supabase
+            .from('profiles')
+            .select('*')
+            .in('user_id', userIds);
+          
+          const membersWithProfiles = membersData.map((m: any) => ({
+            ...m,
+            profiles: profilesData?.find((p: any) => p.user_id === m.user_id)
+          }));
+          setMembers(membersWithProfiles);
           
           // Load live locations for members
           const { data: locationsData } = await supabase

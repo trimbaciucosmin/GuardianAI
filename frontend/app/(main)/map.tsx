@@ -167,14 +167,24 @@ export default function MapScreen() {
 
   const loadCircleData = async (circleId: string) => {
     try {
-      // Load members with profiles
+      // Load members with profiles using RPC to bypass RLS recursion
       const { data: membersData, error: membersError } = await supabase
-        .from('circle_members')
-        .select(`*, profiles (*)`)
-        .eq('circle_id', circleId);
+        .rpc('get_circle_members', { p_circle_id: circleId });
 
       if (!membersError && membersData) {
-        setMembers(membersData);
+        // Fetch profiles for members
+        const userIds = membersData.map((m: any) => m.user_id);
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('*')
+          .in('user_id', userIds);
+        
+        // Merge profiles with members
+        const membersWithProfiles = membersData.map((m: any) => ({
+          ...m,
+          profiles: profilesData?.find((p: any) => p.user_id === m.user_id)
+        }));
+        setMembers(membersWithProfiles);
       }
 
       // Load places
