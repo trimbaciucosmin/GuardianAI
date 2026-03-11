@@ -52,35 +52,21 @@ export default function OnboardingScreen() {
         name: name.trim(),
         phone: phone.trim() || null,
         role,
-        created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
 
+      // Use upsert to handle both insert and update cases
       const { data, error } = await supabase
         .from('profiles')
-        .insert(profileData)
+        .upsert(profileData, { onConflict: 'user_id' })
         .select()
         .single();
 
       if (error) {
-        // If profile exists, update it
-        if (error.code === '23505') {
-          const { data: updatedData, error: updateError } = await supabase
-            .from('profiles')
-            .update({ name: name.trim(), phone: phone.trim() || null, role, updated_at: new Date().toISOString() })
-            .eq('user_id', user.id)
-            .select()
-            .single();
-
-          if (updateError) throw updateError;
-          setProfile(updatedData);
-        } else {
-          throw error;
-        }
-      } else {
-        setProfile(data);
+        throw error;
       }
-
+      
+      setProfile(data);
       router.replace('/(main)/map');
     } catch (error: any) {
       console.error('Onboarding error:', error);
@@ -164,13 +150,15 @@ export default function OnboardingScreen() {
                         color={role === r.key ? '#6366F1' : '#64748B'}
                       />
                     </View>
-                    <Text style={[
-                      styles.roleLabel,
-                      role === r.key && styles.roleLabelSelected,
-                    ]}>
-                      {r.label}
-                    </Text>
-                    <Text style={styles.roleDescription}>{r.description}</Text>
+                    <View style={styles.roleTextContainer}>
+                      <Text style={[
+                        styles.roleLabel,
+                        role === r.key && styles.roleLabelSelected,
+                      ]}>
+                        {r.label}
+                      </Text>
+                      <Text style={styles.roleDescription}>{r.description}</Text>
+                    </View>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -291,11 +279,13 @@ const styles = StyleSheet.create({
   roleIconWrapperSelected: {
     backgroundColor: 'rgba(99, 102, 241, 0.2)',
   },
+  roleTextContainer: {
+    flex: 1,
+  },
   roleLabel: {
     fontSize: 16,
     fontWeight: '600',
     color: '#E2E8F0',
-    flex: 1,
   },
   roleLabelSelected: {
     color: '#FFFFFF',
@@ -303,6 +293,7 @@ const styles = StyleSheet.create({
   roleDescription: {
     fontSize: 12,
     color: '#64748B',
+    marginTop: 2,
   },
   completeButton: {
     backgroundColor: '#6366F1',
