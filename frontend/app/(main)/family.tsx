@@ -8,7 +8,9 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
+  Share,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -236,13 +238,41 @@ export default function FamilyScreen() {
     );
   };
 
-  const copyInviteCode = () => {
+  const copyInviteCode = async () => {
     if (currentCircle?.invite_code) {
-      Alert.alert(
-        'Invite Code',
-        `Share this code with family members:\n\n${currentCircle.invite_code}`,
-        [{ text: 'OK' }]
-      );
+      try {
+        // Copy to clipboard
+        await Clipboard.setStringAsync(currentCircle.invite_code);
+        
+        // Show options to share or just confirm copy
+        Alert.alert(
+          'Invite Code Copied!',
+          `Code: ${currentCircle.invite_code}\n\nShare it with family members to invite them.`,
+          [
+            { text: 'OK', style: 'cancel' },
+            { 
+              text: 'Share', 
+              onPress: async () => {
+                try {
+                  await Share.share({
+                    message: `Join my family safety circle on Guardian AI!\n\nUse this invite code: ${currentCircle.invite_code}\n\nDownload the app and enter this code to join.`,
+                    title: 'Join My Family Circle',
+                  });
+                } catch (e) {
+                  console.error('Share error:', e);
+                }
+              }
+            },
+          ]
+        );
+      } catch (error) {
+        // Fallback if clipboard fails
+        Alert.alert(
+          'Invite Code',
+          `${currentCircle.invite_code}\n\nShare this code with family members.`,
+          [{ text: 'OK' }]
+        );
+      }
     }
   };
 

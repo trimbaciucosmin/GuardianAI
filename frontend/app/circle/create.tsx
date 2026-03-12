@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Share,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -85,22 +86,40 @@ export default function CreateCircleScreen() {
     if (!createdCircle) return;
     
     try {
-      await Share.share({
+      const result = await Share.share({
         message: `Join my family safety circle on Guardian AI!\n\nUse this invite code: ${createdCircle.invite_code}\n\nDownload the app and enter this code to join our family circle.`,
         title: 'Join My Family Circle',
       });
+      
+      if (result.action === Share.sharedAction) {
+        console.log('Shared successfully');
+      }
     } catch (error) {
       console.error('Share error:', error);
+      // Fallback to copy
+      await handleCopyCode();
     }
   };
 
-  const handleCopyCode = () => {
+  const handleCopyCode = async () => {
     if (!createdCircle) return;
-    Alert.alert(
-      'Invite Code Copied!',
-      `${createdCircle.invite_code}\n\nShare this code with family members to invite them.`,
-      [{ text: 'OK' }]
-    );
+    
+    try {
+      await Clipboard.setStringAsync(createdCircle.invite_code);
+      Alert.alert(
+        'Code Copied!',
+        `Invite code "${createdCircle.invite_code}" has been copied to your clipboard.\n\nShare it with family members to invite them.`,
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Copy error:', error);
+      // Fallback - just show the code
+      Alert.alert(
+        'Invite Code',
+        `${createdCircle.invite_code}\n\nManually copy this code and share it with family members.`,
+        [{ text: 'OK' }]
+      );
+    }
   };
 
   const handleDone = () => {
