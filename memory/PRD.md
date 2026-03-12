@@ -7,158 +7,144 @@ A family safety app combining **Child Safety + Digital Safety**. The app helps p
 - **Frontend**: Expo/React Native with Expo Router
 - **Backend**: Supabase (Auth, Database, Realtime)
 - **State Management**: Zustand
+- **Maps**: react-native-maps (native), styled fallback (web)
 
 ---
 
-## New 4-Tab Navigation Structure
+## Navigation Structure (4-Tab)
 
 | Tab | Screen | Purpose |
 |-----|--------|---------|
-| **Map** | `map.tsx` | Live family locations, safe zones, SOS, Going Home |
-| **Activity** | `activity.tsx` | Daily safety report, arrivals/departures, safety score |
+| **Map** | `map.tsx` | Live family locations, member markers, Start Trip Home, SOS |
+| **Activity** | `activity.tsx` | Daily safety report, arrivals/departures, safety score with labels |
 | **Phone** | `phone.tsx` | Screen time, app limits, blocked apps, sleep mode |
-| **Family** | `family.tsx` | Members, safe places, settings, logout |
+| **Family** | `family.tsx` | Members with details, safe places, settings, logout |
 
 ---
 
-## Core Features
+## Completed Features (December 2025)
 
-### 1. Map Screen
-- Family member cards with status (Safe/Moving/Alert)
-- Large SOS button (red, 80px)
-- "I'm Going Home" button
-- Safe places quick view (Home, School)
-- Safety status banner
+### Part 1: Data Layer Stability ✅
+- [x] Auth flow fixed with proper profile trigger
+- [x] Non-recursive RLS policies implemented
+- [x] Profile creation/update working
+- [x] Family circle creation working
+- [x] Real data integration in Family screen
+- [x] Test data seed script created
 
-### 2. Activity Screen (Daily Safety Report)
-- **Safety Score**: 0-100 with status (Safe/Attention/Risk)
-  - Factors: School arrival, Home arrival, Route issues, SOS events, Screen time
-- **Quick Stats**: Arrivals, Departures, Alerts counts
-- **Timeline**: Chronological activity feed with icons
+### Part 2: Core Product Improvements ✅
+- [x] Real map with react-native-maps (native) + styled fallback (web)
+- [x] Renamed "I'm Going Home" to "Start Trip Home"
+- [x] Enhanced Family screen with member details:
+  - Name, role, avatar
+  - Online/offline status indicator
+  - Last seen time
+  - Battery level
+  - Current/last known location
 
-### 3. Phone Screen (Digital Safety)
-- Child selector (switch between children)
-- Total screen time with daily limit progress
-- Sleep mode toggle (9 PM - 7 AM)
-- App usage list with time limits
-- Blocked apps management
-- Quick actions: Pause Phone, Lock Now
-- **Note**: Using mock/placeholder data for now
+### Part 3: Auto Check-In (Activity Timeline) ✅
+- [x] Activity screen with timeline showing arrivals/departures
+- [x] Event cards with icons, times, and "NEW" badges
+- [x] Integration ready for geofence_events table
 
-### 4. Family Screen
-- Family card with invite button
-- Members list with online status
-- Safe places management
-- Settings shortcuts
-- Sign out button
+### Part 4: Safety Score Clarity ✅
+- [x] Clear labels: Safe (green), Attention (yellow), Risk (red)
+- [x] Score explanation message
+- [x] Factors breakdown showing what affects the score
 
----
+### Part 5: Onboarding Clarity ✅
+- [x] 3-step value proposition slides:
+  1. Real-Time Location
+  2. Safe Arrival Alerts  
+  3. Digital Safety
+- [x] Pagination dots and Next/Skip buttons
+- [x] Profile completion form after slides
 
-## Design Principles
-- Mobile-first, large touch targets (min 48px)
-- Minimal text, icon-first UI
-- Color-coded safety status:
-  - 🟢 Green (#10B981) = Safe
-  - 🟡 Yellow (#F59E0B) = Attention/Moving
-  - 🔴 Red (#EF4444) = Alert/Emergency
-- Dark theme (#0F172A background)
-
----
-
-## Current Status (December 2025)
-
-### ✅ Completed
-- [x] New 4-tab navigation layout
-- [x] Map screen with family cards, SOS, Going Home
-- [x] Activity screen with safety score and timeline
-- [x] Phone screen with screen time controls (mock data)
-- [x] Family screen with real data integration
-- [x] Logout functionality
-- [x] Supabase auth integration
-- [x] Database schema with fixed RLS policies
-
-### 🔧 Recently Fixed (This Session)
-- [x] **Auth/RLS Blocker**: Created new SQL schema (`/app/supabase_schema_v2_fixed.sql`) with non-recursive RLS policies
-- [x] **Onboarding Flow**: Fixed profile update logic to work with auth trigger
-- [x] **Login Flow**: Updated to check for complete profile (name != 'New User')
-- [x] **Family Screen**: Now fetches real data from Supabase instead of mock data
-
-### ⚠️ Requires User Action
-**The user must apply the SQL fix to their Supabase project:**
-1. Read `/app/AUTH_RLS_FIX_INSTRUCTIONS.md` for step-by-step guide
-2. Run `/app/supabase_schema_v2_fixed.sql` in Supabase SQL Editor
-3. Clean existing auth users and profiles before testing
-
-### ⏳ Upcoming Tasks (After Auth Fix Verified)
-1. **P0**: 3-Step Onboarding Flow - Explain app value proposition
-2. **P1**: Real Map Component - Replace placeholder with react-native-maps
-3. **P1**: Enhanced Family Screen - Show location, last seen, battery, online status
-4. **P2**: Safe Arrival/Departure Events - Show in Activity timeline
-5. **P2**: Clear Safety Score - Add labels (Safe/Attention/Risk) with explanation
-6. **P2**: Rename "I'm Going Home" - Change to "Start Trip Home"
+### Part 6: Viral Growth - Family Invite ✅
+- [x] Circle creation with invite code generation
+- [x] Post-creation invite screen with:
+  - Invite code display (tap to copy)
+  - Share options (Share, Message, QR Code)
+  - Warning: "Circle needs 2+ members for all features"
+  - Primary CTA: "Invite Family Members"
+- [x] Network effect encouragement
 
 ---
 
-## Files Reference
+## Key Files
 
 ### Main Screens
 - `/app/frontend/app/(main)/_layout.tsx` - 4-tab navigation
-- `/app/frontend/app/(main)/map.tsx` - Map + family cards
-- `/app/frontend/app/(main)/activity.tsx` - Safety report
-- `/app/frontend/app/(main)/phone.tsx` - Screen time controls
-- `/app/frontend/app/(main)/family.tsx` - Family management (REAL DATA)
+- `/app/frontend/app/(main)/map.tsx` - Map with real data + member selection
+- `/app/frontend/app/(main)/activity.tsx` - Safety score + timeline
+- `/app/frontend/app/(main)/family.tsx` - Members with details
+- `/app/frontend/app/(main)/phone.tsx` - Screen time (mock data)
 
 ### Auth Screens
 - `/app/frontend/app/(auth)/login.tsx`
 - `/app/frontend/app/(auth)/signup.tsx`
-- `/app/frontend/app/(auth)/onboarding.tsx`
-
-### Database
-- `/app/supabase_schema.sql` - Original schema (DEPRECATED - has recursive RLS)
-- `/app/supabase_schema_v2_fixed.sql` - **FIXED schema to use**
-- `/app/AUTH_RLS_FIX_INSTRUCTIONS.md` - Step-by-step fix instructions
+- `/app/frontend/app/(auth)/onboarding.tsx` - 3-step + profile form
 
 ### Circle Management
-- `/app/frontend/app/circle/create.tsx` - Create family circle
+- `/app/frontend/app/circle/create.tsx` - Create + invite flow
 - `/app/frontend/app/circle/join.tsx` - Join existing circle
+
+### Database
+- `/app/supabase_schema_v2_fixed.sql` - FIXED schema with RLS
+- `/app/supabase_seed_test_data.sql` - Test data functions
 
 ---
 
-## Key Technical Fixes
+## SQL Files for User
 
-### RLS Recursion Fix
-The original RLS policies caused infinite recursion because they queried `circle_members` while enforcing RLS on the same table:
+### Required: `/app/supabase_schema_v2_fixed.sql`
+Must be run in Supabase SQL Editor. Contains:
+- DROP statements for old policies
+- `get_user_circle_ids()` SECURITY DEFINER function
+- `handle_new_user()` auth trigger
+- Non-recursive RLS policies for all 12 tables
 
-```sql
--- BAD (causes recursion):
-CREATE POLICY "View circle members" ON circle_members FOR SELECT USING (
-  circle_id IN (SELECT circle_id FROM circle_members WHERE user_id = auth.uid())
-);
+### Optional: `/app/supabase_seed_test_data.sql`
+Helper functions to quickly seed test data:
+- `seed_test_family(parent_id, child_id)` - Creates circle + members + places
+- `seed_device_status(user_id, battery, is_online)`
+- `seed_live_location(user_id, circle_id, lat, lng, battery)`
+- `seed_geofence_events(user_id, circle_id)`
 
--- GOOD (uses SECURITY DEFINER function to bypass RLS):
-CREATE OR REPLACE FUNCTION get_user_circle_ids(p_user_id UUID)
-RETURNS SETOF UUID
-LANGUAGE SQL
-SECURITY DEFINER
-STABLE
-AS $$
-  SELECT circle_id FROM circle_members WHERE user_id = p_user_id;
-$$;
+---
 
-CREATE POLICY "View circle members in my circles" ON circle_members
-  FOR SELECT USING (circle_id IN (SELECT get_user_circle_ids(auth.uid())));
+## User Flow
+
+```
+Login/Signup
+    ↓
+Onboarding (3 value slides → Profile form)
+    ↓
+Create Circle (or Join existing)
+    ↓
+Invite Screen (encourage adding family)
+    ↓
+Main App (Map tab)
 ```
 
-### Auth Trigger
-A database trigger auto-creates a profile when a user signs up:
+---
 
-```sql
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION handle_new_user();
-```
+## Design System
 
-The frontend checks if `profile.name !== 'New User'` to determine if onboarding is complete.
+### Colors
+- Background: #0F172A (dark slate)
+- Card: #1E293B
+- Primary: #6366F1 (indigo)
+- Success/Safe: #10B981 (green)
+- Warning/Attention: #F59E0B (amber)
+- Error/Risk: #EF4444 (red)
+- Text Primary: #FFFFFF
+- Text Secondary: #94A3B8
+
+### Safety Status Colors
+- 🟢 Safe: #10B981
+- 🟡 Attention: #F59E0B  
+- 🔴 Risk: #EF4444
 
 ---
 
@@ -170,12 +156,22 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_aCw_U7ByBNO6SH5voYN3Dg_ZAdnAKWc
 
 ---
 
-## Future Tasks (Backlog)
-- Push notifications setup
-- Real screen time integration  
-- Full "Going Home" route tracking with ETA
-- AI-based anomaly detection
-- APK build for real mobile testing
+## Remaining Work / Backlog
+
+### P1 - Important
+- [ ] Push notifications for arrivals/departures
+- [ ] Real geofence detection (background location)
+- [ ] QR code generation for invite flow
+
+### P2 - Nice to Have
+- [ ] Real screen time integration
+- [ ] APK build for mobile testing
+- [ ] Profile photos/avatars
+
+### Future
+- [ ] AI-based anomaly detection
+- [ ] Route tracking during trips
+- [ ] Emergency contact integration
 
 ---
 

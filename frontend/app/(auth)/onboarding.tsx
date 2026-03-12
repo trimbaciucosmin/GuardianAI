@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,28 +10,78 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Dimensions,
+  FlatList,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../lib/store';
 
+const { width } = Dimensions.get('window');
+
 type Role = 'parent' | 'child' | 'teen';
+
+// Value proposition slides
+const VALUE_SLIDES = [
+  {
+    id: '1',
+    icon: 'location',
+    iconColor: '#6366F1',
+    title: 'Real-Time Location',
+    subtitle: 'See where your child is at any moment',
+    description: 'Always know your family\'s location on a live map. Peace of mind, wherever you are.',
+  },
+  {
+    id: '2',
+    icon: 'notifications',
+    iconColor: '#10B981',
+    title: 'Safe Arrival Alerts',
+    subtitle: 'Automatic notifications when they arrive',
+    description: 'Get instant alerts when your child arrives at school, home, or any safe place you set.',
+  },
+  {
+    id: '3',
+    icon: 'phone-portrait',
+    iconColor: '#F59E0B',
+    title: 'Digital Safety',
+    subtitle: 'Protect their online experience',
+    description: 'Monitor screen time, set app limits, and ensure healthy digital habits for your family.',
+  },
+];
 
 export default function OnboardingScreen() {
   const router = useRouter();
   const { user, setProfile } = useAuthStore();
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [showProfileForm, setShowProfileForm] = useState(false);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState<Role>('parent');
   const [isLoading, setIsLoading] = useState(false);
+  const flatListRef = useRef<FlatList>(null);
 
   const roles: { key: Role; label: string; icon: string; description: string }[] = [
     { key: 'parent', label: 'Parent', icon: 'people', description: 'Manage your family circle' },
     { key: 'teen', label: 'Teen (13-17)', icon: 'person', description: 'Privacy-aware tracking' },
     { key: 'child', label: 'Child (6-12)', icon: 'happy', description: 'Simple safety features' },
   ];
+
+  const handleNext = () => {
+    if (currentSlide < VALUE_SLIDES.length - 1) {
+      const nextSlide = currentSlide + 1;
+      setCurrentSlide(nextSlide);
+      flatListRef.current?.scrollToIndex({ index: nextSlide, animated: true });
+    } else {
+      setShowProfileForm(true);
+    }
+  };
+
+  const handleSkip = () => {
+    setShowProfileForm(true);
+  };
 
   const handleComplete = async () => {
     if (!name.trim()) {
@@ -85,11 +135,11 @@ export default function OnboardingScreen() {
         setProfile(updatedProfile);
       }
       
-      router.replace('/(main)/map');
+      // Navigate to invite flow (viral growth feature)
+      router.replace('/circle/create');
     } catch (error: any) {
       console.error('Onboarding error:', error);
       
-      // If foreign key error, the user doesn't exist - auto logout
       if (error.code === '23503') {
         Alert.alert(
           'Session Expired',
@@ -110,6 +160,74 @@ export default function OnboardingScreen() {
     }
   };
 
+  const renderSlide = ({ item }: { item: typeof VALUE_SLIDES[0] }) => (
+    <View style={styles.slide}>
+      <View style={[styles.iconCircle, { backgroundColor: `${item.iconColor}20` }]}>
+        <Ionicons name={item.icon as any} size={64} color={item.iconColor} />
+      </View>
+      <Text style={styles.slideTitle}>{item.title}</Text>
+      <Text style={styles.slideSubtitle}>{item.subtitle}</Text>
+      <Text style={styles.slideDescription}>{item.description}</Text>
+    </View>
+  );
+
+  // Value proposition slides
+  if (!showProfileForm) {
+    return (
+      <SafeAreaView style={styles.container}>
+        {/* Skip button */}
+        <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
+          <Text style={styles.skipText}>Skip</Text>
+        </TouchableOpacity>
+
+        {/* Slides */}
+        <FlatList
+          ref={flatListRef}
+          data={VALUE_SLIDES}
+          renderItem={renderSlide}
+          keyExtractor={(item) => item.id}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={(e) => {
+            const index = Math.round(e.nativeEvent.contentOffset.x / width);
+            setCurrentSlide(index);
+          }}
+          scrollEnabled={true}
+        />
+
+        {/* Pagination dots */}
+        <View style={styles.pagination}>
+          {VALUE_SLIDES.map((_, index) => (
+            <View
+              key={index}
+              style={[
+                styles.dot,
+                currentSlide === index && styles.dotActive,
+              ]}
+            />
+          ))}
+        </View>
+
+        {/* Next button */}
+        <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
+          <LinearGradient
+            colors={['#6366F1', '#8B5CF6']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.nextGradient}
+          >
+            <Text style={styles.nextText}>
+              {currentSlide === VALUE_SLIDES.length - 1 ? 'Get Started' : 'Next'}
+            </Text>
+            <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+          </LinearGradient>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  // Profile form
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -124,23 +242,11 @@ export default function OnboardingScreen() {
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.iconWrapper}>
-              <Ionicons name="rocket" size={48} color="#6366F1" />
+              <Ionicons name="person-circle" size={48} color="#6366F1" />
             </View>
             <Text style={styles.title}>Complete Your Profile</Text>
-            <Text style={styles.subtitle}>Tell us about yourself</Text>
+            <Text style={styles.subtitle}>Tell us about yourself to get started</Text>
           </View>
-
-          {/* Logout/Start Over Button */}
-          <TouchableOpacity 
-            style={styles.startOverButton} 
-            onPress={async () => {
-              await supabase.auth.signOut();
-              router.replace('/(auth)/login');
-            }}
-          >
-            <Ionicons name="refresh" size={16} color="#64748B" />
-            <Text style={styles.startOverText}>Start Over / Different Account</Text>
-          </TouchableOpacity>
 
           {/* Form */}
           <View style={styles.form}>
@@ -219,13 +325,13 @@ export default function OnboardingScreen() {
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <>
-                  <Text style={styles.completeButtonText}>Get Started</Text>
+                  <Text style={styles.completeButtonText}>Continue</Text>
                   <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
                 </>
               )}
             </TouchableOpacity>
 
-            {/* Logout / Start Over Button */}
+            {/* Sign out option */}
             <TouchableOpacity 
               style={styles.logoutButton} 
               onPress={async () => {
@@ -255,6 +361,89 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     padding: 24,
   },
+  // Slide styles
+  slide: {
+    width: width,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+    paddingTop: 60,
+  },
+  iconCircle: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  slideTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  slideSubtitle: {
+    fontSize: 18,
+    fontWeight: '500',
+    color: '#94A3B8',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  slideDescription: {
+    fontSize: 15,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  skipButton: {
+    position: 'absolute',
+    top: 60,
+    right: 24,
+    zIndex: 10,
+  },
+  skipText: {
+    fontSize: 16,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  pagination: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 24,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#334155',
+  },
+  dotActive: {
+    width: 24,
+    backgroundColor: '#6366F1',
+  },
+  nextButton: {
+    marginHorizontal: 24,
+    marginBottom: 40,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  nextGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+    gap: 10,
+  },
+  nextText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  // Profile form styles
   header: {
     alignItems: 'center',
     marginBottom: 32,
@@ -370,18 +559,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
-  },
-  startOverButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    gap: 6,
-    marginBottom: 16,
-  },
-  startOverText: {
-    color: '#64748B',
-    fontSize: 14,
   },
   logoutButton: {
     flexDirection: 'row',

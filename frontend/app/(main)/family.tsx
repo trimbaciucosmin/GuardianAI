@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore, useCircleStore, usePlacesStore } from '../../lib/store';
 
-interface Member {
+interface MemberWithDetails {
   id: string;
   user_id: string;
   role: string;
@@ -25,6 +25,19 @@ interface Member {
     avatar_url: string | null;
     phone: string | null;
   };
+  device_status?: {
+    battery_level: number | null;
+    last_seen: string | null;
+    is_charging: boolean;
+    gps_enabled: boolean;
+  };
+  live_location?: {
+    latitude: number;
+    longitude: number;
+    timestamp: string;
+  };
+  current_place?: string;
+  is_online: boolean;
 }
 
 interface Place {
@@ -43,10 +56,39 @@ export default function FamilyScreen() {
   
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [members, setLocalMembers] = useState<Member[]>([]);
+  const [members, setLocalMembers] = useState<MemberWithDetails[]>([]);
   const [localPlaces, setLocalPlaces] = useState<Place[]>([]);
   
   const tabBarHeight = 60 + insets.bottom;
+
+  const formatLastSeen = (timestamp: string | null | undefined): string => {
+    if (!timestamp) return 'Unknown';
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return date.toLocaleDateString();
+  };
+
+  const isOnline = (lastSeen: string | null | undefined): boolean => {
+    if (!lastSeen) return false;
+    const date = new Date(lastSeen);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    return diffMs < 5 * 60 * 1000; // Online if seen in last 5 minutes
+  };
+
+  const getPlaceFromCoords = (lat: number | undefined, lng: number | undefined): string => {
+    // In a real app, this would reverse geocode or check against saved places
+    if (!lat || !lng) return 'Unknown location';
+    // For now, return a placeholder - would match against localPlaces
+    return 'Current location';
+  };
 
   const fetchCircleData = useCallback(async () => {
     if (!user) return;
@@ -82,7 +124,7 @@ export default function FamilyScreen() {
         if (activeCircle) {
           setCurrentCircle(activeCircle);
           
-          // Fetch members of active circle
+          // Fetch members with profiles
           const { data: membersData, error: membersError } = await supabase
             .from('circle_members')
             .select(`
@@ -99,10 +141,43 @@ export default function FamilyScreen() {
             .eq('circle_id', activeCircle.id);
 
           if (!membersError && membersData) {
-            const formattedMembers = membersData.map((m: any) => ({
-              ...m,
-              profile: m.profiles
-            }));
+            // Fetch device status and locations for each member
+            const memberIds = membersData.map((m: any) => m.user_id);
+            
+            const { data: deviceData } = await supabase
+              .from('device_status')
+              .select('*')
+              .in('user_id', memberIds);
+
+            const { data: locationData } = await supabase
+              .from('live_locations')
+              .select('*')
+              .eq('circle_id', activeCircle.id);
+
+            const formattedMembers: MemberWithDetails[] = membersData.map((m: any) => {
+              const device = deviceData?.find((d: any) => d.user_id === m.user_id);
+              const location = locationData?.find((l: any) => l.user_id === m.user_id);
+              const lastSeenTime = device?.last_seen || location?.timestamp;
+              
+              return {
+                ...m,
+                profile: m.profiles,
+                device_status: device ? {
+                  battery_level: device.battery_level,
+                  last_seen: device.last_seen,
+                  is_charging: device.is_charging,
+                  gps_enabled: device.gps_enabled,
+                } : undefined,
+                live_location: location ? {
+                  latitude: location.latitude,
+                  longitude: location.longitude,
+                  timestamp: location.timestamp,
+                } : undefined,
+                current_place: getPlaceFromCoords(location?.latitude, location?.longitude),
+                is_online: isOnline(lastSeenTime),
+              };
+            });
+            
             setLocalMembers(formattedMembers);
             setMembers(formattedMembers);
           }
@@ -261,6 +336,14 @@ export default function FamilyScreen() {
             </View>
           </View>
           
+          {/* Incomplete circle warning */}
+          {members.length < 2 && (
+            <View style={styles.warningBanner}>
+              <Ionicons name="warning" size={18} color="#F59E0B" />
+              <Text style={styles.warningText}>Add family members to unlock all features</Text>
+            </View>
+          )}
+          
           {/* Invite Button */}
           <TouchableOpacity style={styles.inviteButton} onPress={copyInviteCode}>
             <Ionicons name="person-add" size={20} color="#6366F1" />
@@ -268,7 +351,7 @@ export default function FamilyScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Members Section */}
+        {/* Members Section - Enhanced with details */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Members</Text>
           {members.length === 0 ? (
@@ -282,8 +365,12 @@ export default function FamilyScreen() {
                   <Text style={styles.memberInitial}>
                     {member.profile?.name?.[0]?.toUpperCase() || '?'}
                   </Text>
-                  <View style={[styles.statusDot, { backgroundColor: '#10B981' }]} />
+                  <View style={[
+                    styles.statusDot, 
+                    { backgroundColor: member.is_online ? '#10B981' : '#64748B' }
+                  ]} />
                 </View>
+                
                 <View style={styles.memberInfo}>
                   <View style={styles.memberNameRow}>
                     <Text style={styles.memberName}>
@@ -296,11 +383,46 @@ export default function FamilyScreen() {
                       </View>
                     )}
                   </View>
-                  <Text style={styles.memberRole}>
-                    {member.role === 'parent' ? 'Parent' : member.role === 'teen' ? 'Teen' : 'Child'}
-                  </Text>
+                  
+                  {/* Location and Last Seen */}
+                  <View style={styles.memberDetails}>
+                    <View style={styles.detailRow}>
+                      <Ionicons name="location" size={12} color="#64748B" />
+                      <Text style={styles.detailText}>
+                        {member.current_place || 'Location unknown'}
+                      </Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <Ionicons name="time" size={12} color="#64748B" />
+                      <Text style={styles.detailText}>
+                        {member.is_online ? 'Online now' : formatLastSeen(member.device_status?.last_seen || member.live_location?.timestamp)}
+                      </Text>
+                    </View>
+                  </View>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color="#64748B" />
+                
+                {/* Battery and Status */}
+                <View style={styles.memberStatus}>
+                  {member.device_status?.battery_level !== undefined && member.device_status?.battery_level !== null ? (
+                    <View style={styles.batteryIndicator}>
+                      <Ionicons 
+                        name={member.device_status.battery_level > 20 ? "battery-half" : "battery-dead"} 
+                        size={16} 
+                        color={member.device_status.battery_level > 20 ? "#64748B" : "#EF4444"} 
+                      />
+                      <Text style={[
+                        styles.batteryText,
+                        { color: member.device_status.battery_level > 20 ? '#64748B' : '#EF4444' }
+                      ]}>
+                        {member.device_status.battery_level}%
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={styles.noBattery}>
+                      <Ionicons name="battery-dead" size={16} color="#475569" />
+                    </View>
+                  )}
+                </View>
               </TouchableOpacity>
             ))
           )}
@@ -524,6 +646,20 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     marginTop: 2,
   },
+  warningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderRadius: 10,
+    padding: 12,
+    gap: 10,
+    marginBottom: 12,
+  },
+  warningText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#F59E0B',
+  },
   inviteButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -624,10 +760,37 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#6366F1',
   },
-  memberRole: {
-    fontSize: 13,
-    color: '#94A3B8',
-    marginTop: 2,
+  memberDetails: {
+    marginTop: 4,
+    gap: 2,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  detailText: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  memberStatus: {
+    alignItems: 'flex-end',
+  },
+  batteryIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(30, 41, 59, 0.8)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  batteryText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  noBattery: {
+    opacity: 0.5,
   },
   placeCard: {
     flexDirection: 'row',

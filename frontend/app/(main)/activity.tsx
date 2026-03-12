@@ -3,63 +3,99 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
+  TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 
-// Mock data for activity timeline
+// Safety score configuration with clear labels
+const getSafetyConfig = (score: number) => {
+  if (score >= 80) {
+    return {
+      label: 'Safe',
+      color: '#10B981',
+      bgColor: 'rgba(16, 185, 129, 0.15)',
+      icon: 'shield-checkmark',
+      message: 'Everything looks great! All family members arrived safely today.',
+    };
+  } else if (score >= 50) {
+    return {
+      label: 'Attention',
+      color: '#F59E0B',
+      bgColor: 'rgba(245, 158, 11, 0.15)',
+      icon: 'warning',
+      message: 'Some items need your attention. Check the alerts below.',
+    };
+  } else {
+    return {
+      label: 'Risk',
+      color: '#EF4444',
+      bgColor: 'rgba(239, 68, 68, 0.15)',
+      icon: 'alert-circle',
+      message: 'Immediate attention required. Review the timeline for details.',
+    };
+  }
+};
+
+// Mock data for demonstration
 const mockTimeline = [
-  { id: '1', type: 'arrival', title: 'Emma arrived at School', time: '8:15 AM', icon: 'school', color: '#10B981' },
-  { id: '2', type: 'departure', title: 'Jake left Home', time: '8:30 AM', icon: 'home', color: '#6366F1' },
-  { id: '3', type: 'arrival', title: 'Jake arrived at School', time: '8:52 AM', icon: 'school', color: '#10B981' },
-  { id: '4', type: 'screen', title: 'Emma exceeded screen time', time: '2:30 PM', icon: 'phone-portrait', color: '#F59E0B' },
-  { id: '5', type: 'arrival', title: 'Emma arrived at Home', time: '3:45 PM', icon: 'home', color: '#10B981' },
+  {
+    id: '1',
+    type: 'arrival',
+    icon: 'checkmark-circle',
+    color: '#10B981',
+    title: 'Emma arrived at Home',
+    subtitle: 'Safe arrival confirmed',
+    time: '3:45 PM',
+    isNew: true,
+  },
+  {
+    id: '2',
+    type: 'departure',
+    icon: 'exit',
+    color: '#6366F1',
+    title: 'Emma left School',
+    subtitle: 'Oak Elementary School',
+    time: '3:30 PM',
+    isNew: false,
+  },
+  {
+    id: '3',
+    type: 'arrival',
+    icon: 'checkmark-circle',
+    color: '#10B981',
+    title: 'Emma arrived at School',
+    subtitle: 'On time arrival',
+    time: '8:15 AM',
+    isNew: false,
+  },
+  {
+    id: '4',
+    type: 'departure',
+    icon: 'exit',
+    color: '#6366F1',
+    title: 'Emma left Home',
+    subtitle: 'Started trip to school',
+    time: '7:55 AM',
+    isNew: false,
+  },
 ];
-
-// Calculate safety score based on mock data
-const calculateSafetyScore = () => {
-  // Mock calculation
-  const arrivedSchool = true; // +20
-  const arrivedHome = true; // +20
-  const noRouteDeviations = true; // +20
-  const noSOS = true; // +20
-  const screenTimeLimitOK = false; // +20
-  
-  let score = 0;
-  if (arrivedSchool) score += 20;
-  if (arrivedHome) score += 20;
-  if (noRouteDeviations) score += 20;
-  if (noSOS) score += 20;
-  if (screenTimeLimitOK) score += 20;
-  
-  return score;
-};
-
-const getSafetyStatus = (score: number) => {
-  if (score >= 80) return { label: 'Safe', color: '#10B981' };
-  if (score >= 50) return { label: 'Attention', color: '#F59E0B' };
-  return { label: 'Risk', color: '#EF4444' };
-};
 
 export default function ActivityScreen() {
   const insets = useSafeAreaInsets();
-  const [selectedDay, setSelectedDay] = useState('Today');
-  const safetyScore = calculateSafetyScore();
-  const safetyStatus = getSafetyStatus(safetyScore);
-
-  const days = ['Today', 'Yesterday', 'This Week'];
-  
-  // Tab bar height
+  const [safetyScore] = useState(92);
   const tabBarHeight = 60 + insets.bottom;
+  
+  const safetyConfig = getSafetyConfig(safetyScore);
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Text style={styles.title}>Activity</Text>
-        <Text style={styles.subtitle}>Daily Safety Report</Text>
+        <Text style={styles.date}>Today, December 12</Text>
       </View>
 
       <ScrollView 
@@ -69,38 +105,48 @@ export default function ActivityScreen() {
         {/* Safety Score Card */}
         <View style={styles.scoreCard}>
           <View style={styles.scoreHeader}>
-            <Text style={styles.scoreLabel}>Family Safety Score</Text>
-            <View style={[styles.statusBadge, { backgroundColor: safetyStatus.color }]}>
-              <Text style={styles.statusText}>{safetyStatus.label}</Text>
+            <Text style={styles.scoreTitle}>Daily Safety Score</Text>
+            <View style={[styles.scoreBadge, { backgroundColor: safetyConfig.bgColor }]}>
+              <Ionicons name={safetyConfig.icon as any} size={16} color={safetyConfig.color} />
+              <Text style={[styles.scoreBadgeText, { color: safetyConfig.color }]}>
+                {safetyConfig.label}
+              </Text>
             </View>
           </View>
           
           <View style={styles.scoreDisplay}>
-            <Text style={[styles.scoreNumber, { color: safetyStatus.color }]}>{safetyScore}</Text>
+            <Text style={[styles.scoreNumber, { color: safetyConfig.color }]}>{safetyScore}</Text>
             <Text style={styles.scoreMax}>/100</Text>
           </View>
+          
+          {/* Score explanation */}
+          <View style={[styles.scoreExplanation, { backgroundColor: safetyConfig.bgColor }]}>
+            <Ionicons name="information-circle" size={18} color={safetyConfig.color} />
+            <Text style={[styles.scoreExplanationText, { color: safetyConfig.color }]}>
+              {safetyConfig.message}
+            </Text>
+          </View>
 
-          {/* Score Breakdown */}
-          <View style={styles.scoreBreakdown}>
-            <View style={styles.scoreItem}>
-              <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-              <Text style={styles.scoreItemText}>School arrival</Text>
-            </View>
-            <View style={styles.scoreItem}>
-              <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-              <Text style={styles.scoreItemText}>Home arrival</Text>
-            </View>
-            <View style={styles.scoreItem}>
-              <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-              <Text style={styles.scoreItemText}>No route issues</Text>
-            </View>
-            <View style={styles.scoreItem}>
-              <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-              <Text style={styles.scoreItemText}>No SOS events</Text>
-            </View>
-            <View style={styles.scoreItem}>
-              <Ionicons name="alert-circle" size={20} color="#F59E0B" />
-              <Text style={styles.scoreItemText}>Screen time exceeded</Text>
+          {/* Score factors */}
+          <View style={styles.scoreFactors}>
+            <Text style={styles.factorsTitle}>What affects this score:</Text>
+            <View style={styles.factorsList}>
+              <View style={styles.factorItem}>
+                <Ionicons name="checkmark" size={14} color="#10B981" />
+                <Text style={styles.factorText}>School arrival on time</Text>
+              </View>
+              <View style={styles.factorItem}>
+                <Ionicons name="checkmark" size={14} color="#10B981" />
+                <Text style={styles.factorText}>Home arrival confirmed</Text>
+              </View>
+              <View style={styles.factorItem}>
+                <Ionicons name="checkmark" size={14} color="#10B981" />
+                <Text style={styles.factorText}>No route deviations</Text>
+              </View>
+              <View style={styles.factorItem}>
+                <Ionicons name="checkmark" size={14} color="#10B981" />
+                <Text style={styles.factorText}>Battery level healthy</Text>
+              </View>
             </View>
           </View>
         </View>
@@ -108,52 +154,59 @@ export default function ActivityScreen() {
         {/* Quick Stats */}
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
-            <Ionicons name="enter" size={24} color="#10B981" />
-            <Text style={styles.statNumber}>4</Text>
+            <View style={[styles.statIcon, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
+              <Ionicons name="enter" size={20} color="#10B981" />
+            </View>
+            <Text style={styles.statNumber}>2</Text>
             <Text style={styles.statLabel}>Arrivals</Text>
           </View>
           <View style={styles.statCard}>
-            <Ionicons name="exit" size={24} color="#6366F1" />
-            <Text style={styles.statNumber}>3</Text>
+            <View style={[styles.statIcon, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }]}>
+              <Ionicons name="exit" size={20} color="#6366F1" />
+            </View>
+            <Text style={styles.statNumber}>2</Text>
             <Text style={styles.statLabel}>Departures</Text>
           </View>
           <View style={styles.statCard}>
-            <Ionicons name="alert" size={24} color="#F59E0B" />
-            <Text style={styles.statNumber}>1</Text>
+            <View style={[styles.statIcon, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
+              <Ionicons name="notifications" size={20} color="#F59E0B" />
+            </View>
+            <Text style={styles.statNumber}>0</Text>
             <Text style={styles.statLabel}>Alerts</Text>
           </View>
         </View>
 
-        {/* Day Selector */}
-        <View style={styles.daySelector}>
-          {days.map((day) => (
-            <TouchableOpacity
-              key={day}
-              style={[styles.dayButton, selectedDay === day && styles.dayButtonActive]}
-              onPress={() => setSelectedDay(day)}
-            >
-              <Text style={[styles.dayText, selectedDay === day && styles.dayTextActive]}>
-                {day}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Timeline */}
-        <View style={styles.timeline}>
-          <Text style={styles.timelineTitle}>Timeline</Text>
+        {/* Timeline Section */}
+        <View style={styles.timelineSection}>
+          <Text style={styles.sectionTitle}>Today's Timeline</Text>
+          
           {mockTimeline.map((event, index) => (
             <View key={event.id} style={styles.timelineItem}>
-              <View style={styles.timelineLeft}>
-                <View style={[styles.timelineIcon, { backgroundColor: `${event.color}20` }]}>
-                  <Ionicons name={event.icon as any} size={18} color={event.color} />
+              {/* Timeline connector */}
+              {index < mockTimeline.length - 1 && (
+                <View style={styles.timelineConnector} />
+              )}
+              
+              {/* Event icon */}
+              <View style={[styles.eventIcon, { backgroundColor: `${event.color}20` }]}>
+                <Ionicons name={event.icon as any} size={20} color={event.color} />
+              </View>
+              
+              {/* Event content */}
+              <View style={styles.eventContent}>
+                <View style={styles.eventHeader}>
+                  <Text style={styles.eventTitle}>{event.title}</Text>
+                  {event.isNew && (
+                    <View style={styles.newBadge}>
+                      <Text style={styles.newBadgeText}>NEW</Text>
+                    </View>
+                  )}
                 </View>
-                {index < mockTimeline.length - 1 && <View style={styles.timelineLine} />}
+                <Text style={styles.eventSubtitle}>{event.subtitle}</Text>
               </View>
-              <View style={styles.timelineContent}>
-                <Text style={styles.timelineText}>{event.title}</Text>
-                <Text style={styles.timelineTime}>{event.time}</Text>
-              </View>
+              
+              {/* Time */}
+              <Text style={styles.eventTime}>{event.time}</Text>
             </View>
           ))}
         </View>
@@ -169,7 +222,6 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 8,
     paddingBottom: 16,
   },
   title: {
@@ -177,9 +229,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
-  subtitle: {
+  date: {
     fontSize: 14,
-    color: '#94A3B8',
+    color: '#64748B',
     marginTop: 4,
   },
   scoreCard: {
@@ -193,55 +245,84 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  scoreLabel: {
+  scoreTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#94A3B8',
   },
-  statusBadge: {
+  scoreBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
+    gap: 6,
   },
-  statusText: {
-    color: '#FFFFFF',
-    fontSize: 12,
+  scoreBadgeText: {
+    fontSize: 14,
     fontWeight: '700',
   },
   scoreDisplay: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    justifyContent: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   scoreNumber: {
-    fontSize: 72,
+    fontSize: 64,
     fontWeight: '800',
   },
   scoreMax: {
     fontSize: 24,
+    fontWeight: '600',
     color: '#64748B',
     marginLeft: 4,
   },
-  scoreBreakdown: {
-    gap: 10,
-  },
-  scoreItem: {
+  scoreExplanation: {
     flexDirection: 'row',
     alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
     gap: 10,
+    marginBottom: 16,
   },
-  scoreItemText: {
-    color: '#E2E8F0',
-    fontSize: 14,
+  scoreExplanationText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '500',
+    lineHeight: 18,
+  },
+  scoreFactors: {
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+    paddingTop: 16,
+  },
+  factorsTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+    marginBottom: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  factorsList: {
+    gap: 8,
+  },
+  factorItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  factorText: {
+    fontSize: 13,
+    color: '#94A3B8',
   },
   statsRow: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
+    marginHorizontal: 20,
     gap: 12,
-    marginBottom: 20,
+    marginBottom: 24,
   },
   statCard: {
     flex: 1,
@@ -250,45 +331,28 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: 'center',
   },
+  statIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   statNumber: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '700',
     color: '#FFFFFF',
-    marginTop: 8,
   },
   statLabel: {
     fontSize: 12,
-    color: '#94A3B8',
-    marginTop: 4,
+    color: '#64748B',
+    marginTop: 2,
   },
-  daySelector: {
-    flexDirection: 'row',
+  timelineSection: {
     paddingHorizontal: 20,
-    gap: 8,
-    marginBottom: 20,
   },
-  dayButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: '#1E293B',
-  },
-  dayButtonActive: {
-    backgroundColor: '#6366F1',
-  },
-  dayText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#94A3B8',
-  },
-  dayTextActive: {
-    color: '#FFFFFF',
-  },
-  timeline: {
-    paddingHorizontal: 20,
-    paddingBottom: 32,
-  },
-  timelineTitle: {
+  sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: '#FFFFFF',
@@ -296,37 +360,59 @@ const styles = StyleSheet.create({
   },
   timelineItem: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+    position: 'relative',
   },
-  timelineLeft: {
-    alignItems: 'center',
-    width: 44,
+  timelineConnector: {
+    position: 'absolute',
+    left: 20,
+    top: 44,
+    bottom: -16,
+    width: 2,
+    backgroundColor: '#334155',
   },
-  timelineIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  eventIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 12,
   },
-  timelineLine: {
-    width: 2,
+  eventContent: {
     flex: 1,
-    backgroundColor: '#334155',
-    marginVertical: 4,
+    paddingTop: 2,
   },
-  timelineContent: {
-    flex: 1,
-    paddingLeft: 12,
-    paddingBottom: 20,
+  eventHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  timelineText: {
+  eventTitle: {
     fontSize: 15,
+    fontWeight: '600',
     color: '#FFFFFF',
-    fontWeight: '500',
   },
-  timelineTime: {
+  newBadge: {
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  newBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#818CF8',
+  },
+  eventSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  eventTime: {
     fontSize: 12,
     color: '#64748B',
-    marginTop: 4,
+    paddingTop: 4,
   },
 });
