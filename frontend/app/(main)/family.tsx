@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,37 +6,142 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
-import { useAuthStore, useCircleStore } from '../../lib/store';
+import { useAuthStore, useCircleStore, usePlacesStore } from '../../lib/store';
 
-// Mock family data
-const mockFamily = {
-  name: 'Smith Family',
-  inviteCode: 'FAM123',
-  members: [
-    { id: '1', name: 'Sarah', role: 'parent', status: 'online', isAdmin: true },
-    { id: '2', name: 'Mike', role: 'parent', status: 'online', isAdmin: true },
-    { id: '3', name: 'Emma', role: 'child', status: 'online', age: 12 },
-    { id: '4', name: 'Jake', role: 'child', status: 'online', age: 8 },
-  ],
-  places: [
-    { id: '1', name: 'Home', type: 'home', address: '123 Main St' },
-    { id: '2', name: 'School', type: 'school', address: 'Oak Elementary' },
-  ],
-};
+interface Member {
+  id: string;
+  user_id: string;
+  role: string;
+  joined_at: string;
+  profile?: {
+    name: string;
+    avatar_url: string | null;
+    phone: string | null;
+  };
+}
+
+interface Place {
+  id: string;
+  name: string;
+  type: string;
+  address: string | null;
+}
 
 export default function FamilyScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { profile, setUser, setProfile } = useAuthStore();
-  const [showInviteCode, setShowInviteCode] = useState(false);
+  const { user, profile, setUser, setProfile } = useAuthStore();
+  const { circles, currentCircle, setCircles, setCurrentCircle, setMembers } = useCircleStore();
+  const { places, setPlaces } = usePlacesStore();
   
-  // Tab bar height
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [members, setLocalMembers] = useState<Member[]>([]);
+  const [localPlaces, setLocalPlaces] = useState<Place[]>([]);
+  
   const tabBarHeight = 60 + insets.bottom;
+
+  const fetchCircleData = useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      // Fetch user's circles
+      const { data: circlesData, error: circlesError } = await supabase
+        .from('circle_members')
+        .select(`
+          circle_id,
+          role,
+          family_circles (
+            id,
+            name,
+            invite_code,
+            created_by,
+            created_at
+          )
+        `)
+        .eq('user_id', user.id);
+
+      if (circlesError) {
+        console.error('Error fetching circles:', circlesError);
+        return;
+      }
+
+      if (circlesData && circlesData.length > 0) {
+        const circlesList = circlesData.map((cm: any) => cm.family_circles).filter(Boolean);
+        setCircles(circlesList);
+        
+        // Use first circle as current if none selected
+        const activeCircle = currentCircle || circlesList[0];
+        if (activeCircle) {
+          setCurrentCircle(activeCircle);
+          
+          // Fetch members of active circle
+          const { data: membersData, error: membersError } = await supabase
+            .from('circle_members')
+            .select(`
+              id,
+              user_id,
+              role,
+              joined_at,
+              profiles (
+                name,
+                avatar_url,
+                phone
+              )
+            `)
+            .eq('circle_id', activeCircle.id);
+
+          if (!membersError && membersData) {
+            const formattedMembers = membersData.map((m: any) => ({
+              ...m,
+              profile: m.profiles
+            }));
+            setLocalMembers(formattedMembers);
+            setMembers(formattedMembers);
+          }
+
+          // Fetch places
+          const { data: placesData, error: placesError } = await supabase
+            .from('places')
+            .select('*')
+            .eq('circle_id', activeCircle.id);
+
+          if (!placesError && placesData) {
+            setLocalPlaces(placesData);
+            setPlaces(placesData);
+          }
+        }
+      } else {
+        setCircles([]);
+        setCurrentCircle(null);
+        setLocalMembers([]);
+        setLocalPlaces([]);
+      }
+    } catch (error) {
+      console.error('Error fetching circle data:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [user, currentCircle]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchCircleData();
+    }, [fetchCircleData])
+  );
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchCircleData();
+  };
 
   const handleLogout = async () => {
     Alert.alert(
@@ -59,10 +164,68 @@ export default function FamilyScreen() {
   };
 
   const copyInviteCode = () => {
-    Alert.alert('Invite Code', mockFamily.inviteCode, [
-      { text: 'OK' }
-    ]);
+    if (currentCircle?.invite_code) {
+      Alert.alert(
+        'Invite Code',
+        `Share this code with family members:\n\n${currentCircle.invite_code}`,
+        [{ text: 'OK' }]
+      );
+    }
   };
+
+  // No circle - show create/join options
+  if (!loading && !currentCircle) {
+    return (
+      <View style={styles.container}>
+        <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+          <Text style={styles.title}>Family</Text>
+          <TouchableOpacity style={styles.settingsButton} onPress={() => router.push('/settings')}>
+            <Ionicons name="settings-outline" size={24} color="#94A3B8" />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.emptyState}>
+          <View style={styles.emptyIcon}>
+            <Ionicons name="people" size={64} color="#6366F1" />
+          </View>
+          <Text style={styles.emptyTitle}>No Family Circle Yet</Text>
+          <Text style={styles.emptySubtitle}>
+            Create a new circle or join an existing one to start sharing locations with your family.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={() => router.push('/circle/create')}
+          >
+            <Ionicons name="add-circle" size={22} color="#FFFFFF" />
+            <Text style={styles.primaryButtonText}>Create Circle</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => router.push('/circle/join')}
+          >
+            <Ionicons name="enter" size={22} color="#6366F1" />
+            <Text style={styles.secondaryButtonText}>Join Circle</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.logoutButtonSmall} onPress={handleLogout}>
+            <Ionicons name="log-out" size={18} color="#EF4444" />
+            <Text style={styles.logoutTextSmall}>Sign Out</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#6366F1" />
+        <Text style={styles.loadingText}>Loading family data...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -77,6 +240,14 @@ export default function FamilyScreen() {
       <ScrollView 
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: tabBarHeight + 16 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#6366F1"
+            colors={['#6366F1']}
+          />
+        }
       >
         {/* Family Card */}
         <View style={styles.familyCard}>
@@ -85,8 +256,8 @@ export default function FamilyScreen() {
               <Ionicons name="shield-checkmark" size={32} color="#6366F1" />
             </View>
             <View style={styles.familyInfo}>
-              <Text style={styles.familyName}>{mockFamily.name}</Text>
-              <Text style={styles.familyCount}>{mockFamily.members.length} members</Text>
+              <Text style={styles.familyName}>{currentCircle?.name || 'Family Circle'}</Text>
+              <Text style={styles.familyCount}>{members.length} member{members.length !== 1 ? 's' : ''}</Text>
             </View>
           </View>
           
@@ -100,31 +271,39 @@ export default function FamilyScreen() {
         {/* Members Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Members</Text>
-          {mockFamily.members.map((member) => (
-            <TouchableOpacity key={member.id} style={styles.memberCard}>
-              <View style={styles.memberAvatar}>
-                <Text style={styles.memberInitial}>{member.name[0]}</Text>
-                <View style={[
-                  styles.statusDot,
-                  { backgroundColor: member.status === 'online' ? '#10B981' : '#64748B' }
-                ]} />
-              </View>
-              <View style={styles.memberInfo}>
-                <View style={styles.memberNameRow}>
-                  <Text style={styles.memberName}>{member.name}</Text>
-                  {member.isAdmin && (
-                    <View style={styles.adminBadge}>
-                      <Text style={styles.adminText}>Admin</Text>
-                    </View>
-                  )}
+          {members.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyCardText}>No members yet. Invite your family!</Text>
+            </View>
+          ) : (
+            members.map((member) => (
+              <TouchableOpacity key={member.id} style={styles.memberCard}>
+                <View style={styles.memberAvatar}>
+                  <Text style={styles.memberInitial}>
+                    {member.profile?.name?.[0]?.toUpperCase() || '?'}
+                  </Text>
+                  <View style={[styles.statusDot, { backgroundColor: '#10B981' }]} />
                 </View>
-                <Text style={styles.memberRole}>
-                  {member.role === 'parent' ? 'Parent' : `Child${member.age ? ` • ${member.age} years` : ''}`}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#64748B" />
-            </TouchableOpacity>
-          ))}
+                <View style={styles.memberInfo}>
+                  <View style={styles.memberNameRow}>
+                    <Text style={styles.memberName}>
+                      {member.profile?.name || 'Unknown'}
+                      {member.user_id === user?.id ? ' (You)' : ''}
+                    </Text>
+                    {member.user_id === currentCircle?.created_by && (
+                      <View style={styles.adminBadge}>
+                        <Text style={styles.adminText}>Admin</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.memberRole}>
+                    {member.role === 'parent' ? 'Parent' : member.role === 'teen' ? 'Teen' : 'Child'}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#64748B" />
+              </TouchableOpacity>
+            ))
+          )}
         </View>
 
         {/* Safe Places Section */}
@@ -135,25 +314,31 @@ export default function FamilyScreen() {
               <Ionicons name="add-circle" size={24} color="#6366F1" />
             </TouchableOpacity>
           </View>
-          {mockFamily.places.map((place) => (
-            <TouchableOpacity key={place.id} style={styles.placeCard}>
-              <View style={[
-                styles.placeIcon,
-                { backgroundColor: place.type === 'home' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(99, 102, 241, 0.15)' }
-              ]}>
-                <Ionicons 
-                  name={place.type === 'home' ? 'home' : 'school'} 
-                  size={22} 
-                  color={place.type === 'home' ? '#10B981' : '#6366F1'} 
-                />
-              </View>
-              <View style={styles.placeInfo}>
-                <Text style={styles.placeName}>{place.name}</Text>
-                <Text style={styles.placeAddress}>{place.address}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#64748B" />
-            </TouchableOpacity>
-          ))}
+          {localPlaces.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyCardText}>No places added yet. Add your home, school, etc.</Text>
+            </View>
+          ) : (
+            localPlaces.map((place) => (
+              <TouchableOpacity key={place.id} style={styles.placeCard}>
+                <View style={[
+                  styles.placeIcon,
+                  { backgroundColor: place.type === 'home' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(99, 102, 241, 0.15)' }
+                ]}>
+                  <Ionicons 
+                    name={place.type === 'home' ? 'home' : place.type === 'school' ? 'school' : 'location'} 
+                    size={22} 
+                    color={place.type === 'home' ? '#10B981' : '#6366F1'} 
+                  />
+                </View>
+                <View style={styles.placeInfo}>
+                  <Text style={styles.placeName}>{place.name}</Text>
+                  <Text style={styles.placeAddress}>{place.address || 'No address'}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#64748B" />
+              </TouchableOpacity>
+            ))
+          )}
         </View>
 
         {/* Quick Settings */}
@@ -181,17 +366,6 @@ export default function FamilyScreen() {
             </View>
             <Ionicons name="chevron-forward" size={20} color="#64748B" />
           </TouchableOpacity>
-
-          <TouchableOpacity style={styles.settingCard}>
-            <View style={[styles.settingIcon, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
-              <Ionicons name="help-circle" size={22} color="#F59E0B" />
-            </View>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingName}>Help & Support</Text>
-              <Text style={styles.settingDescription}>FAQs and contact</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#64748B" />
-          </TouchableOpacity>
         </View>
 
         {/* Logout Button */}
@@ -210,6 +384,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0F172A',
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#94A3B8',
+    fontSize: 14,
+    marginTop: 12,
   },
   header: {
     flexDirection: 'row',
@@ -232,6 +417,80 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  // Empty state styles
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  emptyIcon: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: '#94A3B8',
+    textAlign: 'center',
+    marginBottom: 32,
+    paddingHorizontal: 24,
+  },
+  primaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#6366F1',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    gap: 10,
+    width: '100%',
+    marginBottom: 12,
+  },
+  primaryButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  secondaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    gap: 10,
+    width: '100%',
+    marginBottom: 24,
+  },
+  secondaryButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6366F1',
+  },
+  logoutButtonSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 16,
+  },
+  logoutTextSmall: {
+    fontSize: 14,
+    color: '#EF4444',
+  },
+  // Family card styles
   familyCard: {
     backgroundColor: '#1E293B',
     marginHorizontal: 20,
@@ -297,6 +556,16 @@ const styles = StyleSheet.create({
   },
   addButton: {
     marginBottom: 12,
+  },
+  emptyCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  emptyCardText: {
+    color: '#64748B',
+    fontSize: 14,
   },
   memberCard: {
     flexDirection: 'row',

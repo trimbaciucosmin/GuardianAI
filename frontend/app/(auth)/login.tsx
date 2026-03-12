@@ -70,14 +70,17 @@ export default function LoginScreen() {
       }
 
       if (data.user) {
-        // Check if user has profile
+        // Check if user has completed profile (not just auto-created)
         const { data: profile } = await supabase
           .from('profiles')
           .select('*')
           .eq('user_id', data.user.id)
           .single();
 
-        if (profile) {
+        // Profile is complete if it exists AND has a real name (not placeholder)
+        const isProfileComplete = profile && profile.name && profile.name !== 'New User';
+        
+        if (isProfileComplete) {
           router.replace('/(main)/map');
         } else {
           router.replace('/(auth)/onboarding');

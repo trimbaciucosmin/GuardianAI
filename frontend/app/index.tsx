@@ -12,9 +12,12 @@ export default function SplashScreen() {
     if (!isLoading) {
       // Navigate based on auth state
       setTimeout(() => {
-        if (isAuthenticated && profile) {
+        // Profile is complete if it exists AND has a real name (not placeholder)
+        const isProfileComplete = profile && profile.name && profile.name !== 'New User';
+        
+        if (isAuthenticated && isProfileComplete) {
           router.replace('/(main)/map');
-        } else if (isAuthenticated && !profile) {
+        } else if (isAuthenticated && !isProfileComplete) {
           router.replace('/(auth)/onboarding');
         } else {
           router.replace('/(auth)/login');

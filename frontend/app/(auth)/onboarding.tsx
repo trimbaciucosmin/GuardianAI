@@ -47,26 +47,44 @@ export default function OnboardingScreen() {
     setIsLoading(true);
 
     try {
-      const profileData = {
-        user_id: user.id,
-        name: name.trim(),
-        phone: phone.trim() || null,
-        role,
-        updated_at: new Date().toISOString(),
-      };
-
-      // Use upsert to handle both insert and update cases
-      const { data, error } = await supabase
+      // First try to UPDATE existing profile (created by auth trigger)
+      const { data: updatedProfile, error: updateError } = await supabase
         .from('profiles')
-        .upsert(profileData, { onConflict: 'user_id' })
+        .update({
+          name: name.trim(),
+          phone: phone.trim() || null,
+          role,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', user.id)
         .select()
         .single();
 
-      if (error) {
-        throw error;
+      if (updateError) {
+        // If update fails (no profile exists), try INSERT
+        if (updateError.code === 'PGRST116') {
+          const { data: newProfile, error: insertError } = await supabase
+            .from('profiles')
+            .insert({
+              user_id: user.id,
+              name: name.trim(),
+              phone: phone.trim() || null,
+              role,
+            })
+            .select()
+            .single();
+
+          if (insertError) {
+            throw insertError;
+          }
+          setProfile(newProfile);
+        } else {
+          throw updateError;
+        }
+      } else {
+        setProfile(updatedProfile);
       }
       
-      setProfile(data);
       router.replace('/(main)/map');
     } catch (error: any) {
       console.error('Onboarding error:', error);
