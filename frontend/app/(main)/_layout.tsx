@@ -1,38 +1,42 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BlurView } from 'expo-blur';
 
 export default function MainLayout() {
   const insets = useSafeAreaInsets();
   
-  // Calculate proper tab bar height with safe area
-  const tabBarHeight = 60 + insets.bottom;
+  const tabBarHeight = 56 + insets.bottom;
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: '#0F172A',
-          borderTopWidth: 0,
-          height: tabBarHeight,
-          paddingTop: 8,
-          paddingBottom: insets.bottom + 8,
-          elevation: 0,
-          shadowOpacity: 0,
           position: 'absolute',
           bottom: 0,
           left: 0,
           right: 0,
+          height: tabBarHeight,
+          backgroundColor: 'rgba(15, 23, 42, 0.92)',
+          borderTopWidth: 0.5,
+          borderTopColor: 'rgba(148, 163, 184, 0.1)',
+          paddingTop: 6,
+          paddingBottom: insets.bottom + 6,
+          elevation: 0,
         },
-        tabBarActiveTintColor: '#6366F1',
-        tabBarInactiveTintColor: '#64748B',
+        tabBarActiveTintColor: '#818CF8',
+        tabBarInactiveTintColor: 'rgba(148, 163, 184, 0.6)',
         tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '600',
-          marginTop: 4,
+          fontSize: 11,
+          fontWeight: '500',
+          marginTop: 2,
+          letterSpacing: 0.2,
+        },
+        tabBarIconStyle: {
+          marginBottom: -2,
         },
       }}
     >
@@ -40,8 +44,10 @@ export default function MainLayout() {
         name="map"
         options={{
           title: 'Map',
-          tabBarIcon: ({ color }) => (
-            <Ionicons name="location" size={26} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <View style={focused ? styles.activeIconContainer : undefined}>
+              <Ionicons name={focused ? "location" : "location-outline"} size={22} color={color} />
+            </View>
           ),
         }}
       />
@@ -49,8 +55,10 @@ export default function MainLayout() {
         name="activity"
         options={{
           title: 'Activity',
-          tabBarIcon: ({ color }) => (
-            <Ionicons name="pulse" size={26} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <View style={focused ? styles.activeIconContainer : undefined}>
+              <Ionicons name={focused ? "pulse" : "pulse-outline"} size={22} color={color} />
+            </View>
           ),
         }}
       />
@@ -58,8 +66,10 @@ export default function MainLayout() {
         name="phone"
         options={{
           title: 'Phone',
-          tabBarIcon: ({ color }) => (
-            <Ionicons name="phone-portrait" size={26} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <View style={focused ? styles.activeIconContainer : undefined}>
+              <Ionicons name={focused ? "phone-portrait" : "phone-portrait-outline"} size={22} color={color} />
+            </View>
           ),
         }}
       />
@@ -67,8 +77,10 @@ export default function MainLayout() {
         name="family"
         options={{
           title: 'Family',
-          tabBarIcon: ({ color }) => (
-            <Ionicons name="people" size={26} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <View style={focused ? styles.activeIconContainer : undefined}>
+              <Ionicons name={focused ? "people" : "people-outline"} size={22} color={color} />
+            </View>
           ),
         }}
       />
@@ -81,3 +93,12 @@ export default function MainLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  activeIconContainer: {
+    backgroundColor: 'rgba(129, 140, 248, 0.15)',
+    borderRadius: 12,
+    padding: 6,
+    marginBottom: -6,
+  },
+});

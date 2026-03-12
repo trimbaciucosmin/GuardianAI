@@ -10,123 +10,163 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '../../lib/store';
 
 const { width, height } = Dimensions.get('window');
 
 // Mock child data
-const mockChild = {
-  name: 'Emma',
-  status: 'safe',
-  location: 'School',
-  lastSeen: 'Now',
-  battery: 85,
-};
+const mockChildren = [
+  { id: '1', name: 'Emma', status: 'safe', location: 'School', lastSeen: '2 min ago', battery: 85, lat: 0, lng: 0 },
+];
 
 export default function MapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { profile } = useAuthStore();
-  const [isGoingHome, setIsGoingHome] = useState(false);
+  const [selectedChild, setSelectedChild] = useState(mockChildren[0]);
 
-  const userName = profile?.name || 'Parent';
+  const userName = profile?.name?.split(' ')[0] || 'there';
+  const tabBarHeight = 56 + insets.bottom;
 
-  const getStatusColor = (status: string) => {
+  const getStatusConfig = (status: string) => {
     switch (status) {
-      case 'safe': return '#10B981';
-      case 'moving': return '#F59E0B';
-      case 'alert': return '#EF4444';
-      default: return '#64748B';
+      case 'safe':
+        return { color: '#34D399', bg: 'rgba(52, 211, 153, 0.12)', label: 'Safe', icon: 'shield-checkmark' };
+      case 'moving':
+        return { color: '#FBBF24', bg: 'rgba(251, 191, 36, 0.12)', label: 'Moving', icon: 'navigate' };
+      case 'alert':
+        return { color: '#F87171', bg: 'rgba(248, 113, 113, 0.12)', label: 'Alert', icon: 'alert-circle' };
+      default:
+        return { color: '#94A3B8', bg: 'rgba(148, 163, 184, 0.12)', label: 'Unknown', icon: 'help-circle' };
     }
   };
 
-  const handleSOS = () => {
-    router.push('/sos/active');
-  };
-
-  const handleGoingHome = () => {
-    setIsGoingHome(true);
-    router.push('/trip/active');
-  };
-
-  // Tab bar height (must match _layout.tsx)
-  const tabBarHeight = 60 + insets.bottom;
+  const statusConfig = getStatusConfig(selectedChild.status);
 
   return (
     <View style={styles.container}>
-      {/* Full Screen Map */}
+      {/* Map Background */}
       <View style={[styles.mapContainer, { paddingBottom: tabBarHeight }]}>
-        {/* Map Placeholder - will be replaced with actual map */}
-        <View style={styles.mapPlaceholder}>
-          <Ionicons name="map" size={48} color="#334155" />
-          <Text style={styles.mapPlaceholderText}>Map View</Text>
+        {/* Simulated Map with Grid Pattern */}
+        <View style={styles.mapBackground}>
+          {/* Grid overlay for map feel */}
+          <View style={styles.mapGrid}>
+            {[...Array(20)].map((_, i) => (
+              <View key={`h-${i}`} style={[styles.gridLineH, { top: i * 40 }]} />
+            ))}
+            {[...Array(12)].map((_, i) => (
+              <View key={`v-${i}`} style={[styles.gridLineV, { left: i * 40 }]} />
+            ))}
+          </View>
           
-          {/* Child Location Marker (centered) */}
-          <View style={styles.childMarker}>
-            <View style={[styles.markerPulse, { backgroundColor: getStatusColor(mockChild.status) }]} />
-            <View style={[styles.markerDot, { backgroundColor: getStatusColor(mockChild.status) }]}>
-              <Text style={styles.markerInitial}>{mockChild.name[0]}</Text>
+          {/* Map Center Marker */}
+          <View style={styles.mapMarkerContainer}>
+            <View style={[styles.markerPulseOuter, { backgroundColor: statusConfig.bg }]} />
+            <View style={[styles.markerPulse, { backgroundColor: statusConfig.bg }]} />
+            <View style={[styles.markerCore, { borderColor: statusConfig.color }]}>
+              <Text style={styles.markerInitial}>{selectedChild.name[0]}</Text>
             </View>
-            <View style={styles.markerLabel}>
-              <Text style={styles.markerName}>{mockChild.name}</Text>
-              <Text style={styles.markerLocation}>{mockChild.location}</Text>
-            </View>
+          </View>
+          
+          {/* Location Label */}
+          <View style={styles.locationLabel}>
+            <Ionicons name="location" size={12} color={statusConfig.color} />
+            <Text style={styles.locationText}>{selectedChild.location}</Text>
           </View>
         </View>
 
-        {/* Top Header Overlay */}
-        <View style={[styles.headerOverlay, { paddingTop: insets.top + 8 }]}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.greeting}>Hi, {userName}</Text>
-            <View style={styles.statusRow}>
-              <View style={[styles.statusDot, { backgroundColor: '#10B981' }]} />
-              <Text style={styles.statusText}>Everyone safe</Text>
+        {/* Top Header - Floating */}
+        <View style={[styles.headerContainer, { paddingTop: insets.top + 12 }]}>
+          <View style={styles.headerCard}>
+            <View style={styles.headerLeft}>
+              <Text style={styles.greeting}>Hi, {userName}</Text>
+              <View style={styles.statusPill}>
+                <View style={[styles.statusDot, { backgroundColor: statusConfig.color }]} />
+                <Text style={[styles.statusLabel, { color: statusConfig.color }]}>
+                  {selectedChild.name} is {statusConfig.label.toLowerCase()}
+                </Text>
+              </View>
             </View>
+            <TouchableOpacity 
+              style={styles.settingsBtn}
+              onPress={() => router.push('/settings')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="settings-outline" size={20} color="#94A3B8" />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity 
-            style={styles.settingsButton}
-            onPress={() => router.push('/settings')}
-          >
-            <Ionicons name="settings-outline" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
         </View>
 
-        {/* Child Info Card Overlay */}
-        <View style={styles.childInfoOverlay}>
+        {/* Child Info Card - Floating */}
+        <View style={styles.childCardContainer}>
           <View style={styles.childCard}>
-            <View style={[styles.childAvatar, { borderColor: getStatusColor(mockChild.status) }]}>
-              <Text style={styles.childInitial}>{mockChild.name[0]}</Text>
+            <View style={styles.childAvatarSection}>
+              <View style={[styles.childAvatar, { borderColor: statusConfig.color }]}>
+                <Text style={styles.childInitial}>{selectedChild.name[0]}</Text>
+              </View>
+              <View style={[styles.statusBadge, { backgroundColor: statusConfig.bg }]}>
+                <Ionicons name={statusConfig.icon as any} size={10} color={statusConfig.color} />
+              </View>
             </View>
-            <View style={styles.childInfo}>
-              <Text style={styles.childName}>{mockChild.name}</Text>
-              <Text style={styles.childLocation}>{mockChild.location} • {mockChild.lastSeen}</Text>
+            <View style={styles.childDetails}>
+              <Text style={styles.childName}>{selectedChild.name}</Text>
+              <View style={styles.childMeta}>
+                <Ionicons name="location-outline" size={12} color="#64748B" />
+                <Text style={styles.childLocation}>{selectedChild.location}</Text>
+                <View style={styles.metaDot} />
+                <Text style={styles.childTime}>{selectedChild.lastSeen}</Text>
+              </View>
             </View>
-            <View style={styles.childBattery}>
-              <Ionicons name="battery-half" size={18} color="#64748B" />
-              <Text style={styles.batteryText}>{mockChild.battery}%</Text>
+            <View style={styles.batterySection}>
+              <Ionicons 
+                name={selectedChild.battery > 20 ? "battery-half" : "battery-dead"} 
+                size={16} 
+                color={selectedChild.battery > 20 ? "#64748B" : "#F87171"} 
+              />
+              <Text style={[
+                styles.batteryText, 
+                { color: selectedChild.battery > 20 ? "#64748B" : "#F87171" }
+              ]}>
+                {selectedChild.battery}%
+              </Text>
             </View>
           </View>
         </View>
 
-        {/* Bottom Action Buttons Overlay */}
-        <View style={[styles.actionsOverlay, { bottom: tabBarHeight + 16 }]}>
+        {/* Action Buttons - Bottom */}
+        <View style={[styles.actionsContainer, { bottom: tabBarHeight + 20 }]}>
           {/* Going Home Button */}
           <TouchableOpacity 
-            style={styles.goingHomeButton}
-            onPress={handleGoingHome}
-            activeOpacity={0.8}
+            style={styles.goingHomeBtn}
+            onPress={() => router.push('/trip/active')}
+            activeOpacity={0.85}
           >
-            <Ionicons name="home" size={28} color="#FFFFFF" />
-            <Text style={styles.goingHomeText}>I'm Going Home</Text>
+            <LinearGradient
+              colors={['#34D399', '#10B981']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.goingHomeGradient}
+            >
+              <Ionicons name="home" size={22} color="#FFFFFF" />
+              <Text style={styles.goingHomeText}>I'm Going Home</Text>
+            </LinearGradient>
           </TouchableOpacity>
 
           {/* SOS Button */}
           <TouchableOpacity 
-            style={styles.sosButton}
-            onPress={handleSOS}
-            activeOpacity={0.8}
+            style={styles.sosBtn}
+            onPress={() => router.push('/sos/active')}
+            activeOpacity={0.85}
           >
-            <Ionicons name="alert" size={32} color="#FFFFFF" />
+            <LinearGradient
+              colors={['#F87171', '#EF4444']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.sosGradient}
+            >
+              <Ionicons name="alert" size={26} color="#FFFFFF" />
+            </LinearGradient>
           </TouchableOpacity>
         </View>
       </View>
@@ -137,185 +177,251 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#0B1120',
   },
   mapContainer: {
     flex: 1,
   },
-  mapPlaceholder: {
+  mapBackground: {
     flex: 1,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0F172A',
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
   },
-  mapPlaceholderText: {
-    color: '#475569',
-    fontSize: 14,
-    marginTop: 8,
+  mapGrid: {
+    ...StyleSheet.absoluteFillObject,
   },
-  childMarker: {
+  gridLineH: {
     position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'rgba(51, 65, 85, 0.3)',
+  },
+  gridLineV: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 1,
+    backgroundColor: 'rgba(51, 65, 85, 0.3)',
+  },
+  mapMarkerContainer: {
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  markerPulseOuter: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    opacity: 0.3,
   },
   markerPulse: {
     position: 'absolute',
     width: 80,
     height: 80,
     borderRadius: 40,
-    opacity: 0.2,
+    opacity: 0.5,
   },
-  markerDot: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  markerCore: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#1E293B',
+    borderWidth: 3,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
   },
   markerInitial: {
-    color: '#FFFFFF',
     fontSize: 20,
     fontWeight: '700',
+    color: '#FFFFFF',
   },
-  markerLabel: {
-    backgroundColor: '#0F172A',
+  locationLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.9)',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8,
-    marginTop: 8,
-    alignItems: 'center',
+    borderRadius: 20,
+    marginTop: 16,
+    gap: 4,
   },
-  markerName: {
-    color: '#FFFFFF',
-    fontSize: 14,
+  locationText: {
+    fontSize: 13,
     fontWeight: '600',
+    color: '#E2E8F0',
   },
-  markerLocation: {
-    color: '#94A3B8',
-    fontSize: 12,
-  },
-  headerOverlay: {
+  headerContainer: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
+    paddingHorizontal: 16,
+  },
+  headerCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(51, 65, 85, 0.5)',
   },
   headerLeft: {
     gap: 4,
   },
   greeting: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#F1F5F9',
+    letterSpacing: -0.3,
   },
-  statusRow: {
+  statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
   statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
-  statusText: {
-    fontSize: 14,
-    color: '#10B981',
+  statusLabel: {
+    fontSize: 13,
     fontWeight: '500',
   },
-  settingsButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(30, 41, 59, 0.9)',
+  settingsBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(30, 41, 59, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  childInfoOverlay: {
+  childCardContainer: {
     position: 'absolute',
-    top: 120,
+    top: 130,
     left: 16,
     right: 16,
   },
   childCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.95)',
-    borderRadius: 16,
+    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+    borderRadius: 14,
     padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(51, 65, 85, 0.4)',
+  },
+  childAvatarSection: {
+    position: 'relative',
   },
   childAvatar: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: '#6366F1',
+    borderRadius: 14,
+    backgroundColor: '#334155',
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  childInitial: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  statusBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
+    borderColor: '#0F172A',
   },
-  childInitial: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  childInfo: {
+  childDetails: {
     flex: 1,
     marginLeft: 12,
   },
   childName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: '#F1F5F9',
+    marginBottom: 3,
   },
-  childLocation: {
-    fontSize: 13,
-    color: '#94A3B8',
-    marginTop: 2,
-  },
-  childBattery: {
+  childMeta: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
-  batteryText: {
-    fontSize: 13,
-    color: '#64748B',
-    fontWeight: '500',
+  childLocation: {
+    fontSize: 12,
+    color: '#94A3B8',
   },
-  actionsOverlay: {
+  metaDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: '#475569',
+    marginHorizontal: 4,
+  },
+  childTime: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  batterySection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(30, 41, 59, 0.6)',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  batteryText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  actionsContainer: {
     position: 'absolute',
     left: 16,
     right: 16,
     flexDirection: 'row',
     gap: 12,
   },
-  goingHomeButton: {
+  goingHomeBtn: {
     flex: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  goingHomeGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#10B981',
-    borderRadius: 16,
     paddingVertical: 18,
-    gap: 12,
+    gap: 10,
   },
   goingHomeText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     color: '#FFFFFF',
+    letterSpacing: -0.2,
   },
-  sosButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#EF4444',
+  sosBtn: {
+    width: 60,
+    height: 60,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  sosGradient: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
