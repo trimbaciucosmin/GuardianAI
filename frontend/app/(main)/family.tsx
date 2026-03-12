@@ -241,19 +241,19 @@ export default function FamilyScreen() {
   const copyInviteCode = async () => {
     if (currentCircle?.invite_code) {
       const appUrl = 'https://guardian-mobile-app.preview.emergentagent.com';
-      const inviteMessage = `🛡️ Join my Family Safety Circle on Guardian AI!
+      const inviteMessage = `Join my Family Circle on Guardian AI!
 
-📱 STEP 1: Open the app
+Open this link in your browser:
 ${appUrl}
 
-📝 STEP 2: Create an account or sign in
+Then:
+1. Tap "Create Account" 
+2. Sign up with your email
+3. After signing in, go to Family tab
+4. Tap "Join Circle"
+5. Enter code: ${currentCircle.invite_code}
 
-🔑 STEP 3: Go to Family tab → Join Circle
-
-✨ STEP 4: Enter this code:
-${currentCircle.invite_code}
-
-Guardian AI helps families stay connected and safe with real-time location sharing and arrival alerts.`;
+This app lets us share locations and stay safe!`;
 
       try {
         // Copy to clipboard
@@ -261,8 +261,8 @@ Guardian AI helps families stay connected and safe with real-time location shari
         
         // Show options to share or just confirm copy
         Alert.alert(
-          'Invite Code Copied!',
-          `Code: ${currentCircle.invite_code}\n\nThe full invitation with app link has been copied.`,
+          'Copied!',
+          `Invitation with code ${currentCircle.invite_code} copied!\n\nTap "Share Now" to send via WhatsApp, SMS, etc.`,
           [
             { text: 'OK', style: 'cancel' },
             { 
@@ -271,7 +271,6 @@ Guardian AI helps families stay connected and safe with real-time location shari
                 try {
                   await Share.share({
                     message: inviteMessage,
-                    title: 'Join My Family Circle',
                   });
                 } catch (e) {
                   console.error('Share error:', e);

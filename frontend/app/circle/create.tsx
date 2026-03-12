@@ -86,32 +86,26 @@ export default function CreateCircleScreen() {
     if (!createdCircle) return;
     
     const appUrl = 'https://guardian-mobile-app.preview.emergentagent.com';
-    const inviteMessage = `🛡️ Join my Family Safety Circle on Guardian AI!
+    const inviteMessage = `Join my Family Circle on Guardian AI!
 
-📱 STEP 1: Open the app
+Open this link in your browser:
 ${appUrl}
 
-📝 STEP 2: Create an account or sign in
+Then:
+1. Tap "Create Account" 
+2. Sign up with your email
+3. After signing in, go to Family tab
+4. Tap "Join Circle"
+5. Enter code: ${createdCircle.invite_code}
 
-🔑 STEP 3: Go to Family tab → Join Circle
-
-✨ STEP 4: Enter this code:
-${createdCircle.invite_code}
-
-Guardian AI helps families stay connected and safe with real-time location sharing and arrival alerts.`;
+This app lets us share locations and stay safe!`;
 
     try {
-      const result = await Share.share({
+      await Share.share({
         message: inviteMessage,
-        title: 'Join My Family Circle',
       });
-      
-      if (result.action === Share.sharedAction) {
-        console.log('Shared successfully');
-      }
     } catch (error) {
       console.error('Share error:', error);
-      // Fallback to copy
       await handleCopyCode();
     }
   };
@@ -120,21 +114,19 @@ Guardian AI helps families stay connected and safe with real-time location shari
     if (!createdCircle) return;
     
     const appUrl = 'https://guardian-mobile-app.preview.emergentagent.com';
-    const fullMessage = `Join my family on Guardian AI!\n\nApp: ${appUrl}\nCode: ${createdCircle.invite_code}`;
+    const fullMessage = `Join Guardian AI!\n\nApp: ${appUrl}\nCode: ${createdCircle.invite_code}`;
     
     try {
       await Clipboard.setStringAsync(fullMessage);
       Alert.alert(
         'Copied!',
-        `Invite code "${createdCircle.invite_code}" and app link copied to clipboard.\n\nShare it with family members to invite them.`,
+        `Code: ${createdCircle.invite_code}\n\nApp link and code copied to clipboard.`,
         [{ text: 'OK' }]
       );
     } catch (error) {
-      console.error('Copy error:', error);
-      // Fallback - just show the code
       Alert.alert(
         'Invite Code',
-        `Code: ${createdCircle.invite_code}\n\nApp: ${appUrl}\n\nManually copy and share with family members.`,
+        `Code: ${createdCircle.invite_code}\n\nApp: ${appUrl}`,
         [{ text: 'OK' }]
       );
     }
