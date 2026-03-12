@@ -13,7 +13,6 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useAuthStore, useCircleStore, useLocationStore } from '../../lib/store';
 import { supabase } from '../../lib/supabase';
@@ -368,35 +367,60 @@ export default function MapScreen() {
               </TouchableOpacity>
             ))}
             
-            <Text style={styles.webMapNote}>Map available on mobile app</Text>
+            {myLocation && (
+              <View style={styles.locationBadge}>
+                <Ionicons name="location" size={14} color="#10B981" />
+                <Text style={styles.locationBadgeText}>
+                  {myLocation.latitude.toFixed(4)}, {myLocation.longitude.toFixed(4)}
+                </Text>
+              </View>
+            )}
+            
+            <Text style={styles.webMapNote}>Tap the locate button to get your position</Text>
           </View>
         ) : (
-          // Native map
-          <MapView
-            style={styles.map}
-            provider={PROVIDER_GOOGLE}
-            region={mapRegion}
-            onRegionChangeComplete={setMapRegion}
-            customMapStyle={darkMapStyle}
-          >
-            {familyMembers.map((member) => (
-              <Marker
+          // Native fallback - same styled view for now
+          <View style={styles.webMapFallback}>
+            <LinearGradient
+              colors={['#0c1929', '#162438', '#1a3045']}
+              style={StyleSheet.absoluteFillObject}
+            />
+            <View style={styles.mapOverlay}>
+              <View style={[styles.road, styles.roadH1]} />
+              <View style={[styles.road, styles.roadH2]} />
+              <View style={[styles.road, styles.roadV1]} />
+              <View style={[styles.road, styles.roadV2]} />
+            </View>
+            {familyMembers.map((member, index) => (
+              <TouchableOpacity 
                 key={member.id}
-                coordinate={{
-                  latitude: member.latitude,
-                  longitude: member.longitude,
-                }}
+                style={[
+                  styles.webMarker,
+                  { 
+                    top: 200 + (index * 60),
+                    left: width / 2 - 25 + (index * 30),
+                  }
+                ]}
                 onPress={() => setSelectedMember(member)}
               >
                 <View style={[
-                  styles.customMarker,
-                  { borderColor: getStatusConfig(member.status).color }
+                  styles.markerBubble,
+                  selectedMember?.id === member.id && styles.markerBubbleSelected
                 ]}>
                   <Text style={styles.markerInitial}>{member.name[0]}</Text>
                 </View>
-              </Marker>
+                <Text style={styles.markerName}>{member.name}</Text>
+              </TouchableOpacity>
             ))}
-          </MapView>
+            {myLocation && (
+              <View style={styles.locationBadge}>
+                <Ionicons name="location" size={14} color="#10B981" />
+                <Text style={styles.locationBadgeText}>
+                  {myLocation.latitude.toFixed(4)}, {myLocation.longitude.toFixed(4)}
+                </Text>
+              </View>
+            )}
+          </View>
         )}
 
         {/* Top Header */}
@@ -540,18 +564,6 @@ export default function MapScreen() {
     </View>
   );
 }
-
-// Dark map style for Google Maps
-const darkMapStyle = [
-  { elementType: 'geometry', stylers: [{ color: '#0F172A' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#0F172A' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#64748B' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1E293B' }] },
-  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#334155' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0c1929' }] },
-  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#1E293B' }] },
-  { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#1E293B' }] },
-];
 
 const styles = StyleSheet.create({
   container: {
@@ -912,5 +924,21 @@ const styles = StyleSheet.create({
     flex: 1,
     color: '#F59E0B',
     fontSize: 13,
+  },
+  locationBadge: {
+    position: 'absolute',
+    top: 140,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+  locationBadgeText: {
+    color: '#10B981',
+    fontSize: 12,
+    fontWeight: '500',
   },
 });
