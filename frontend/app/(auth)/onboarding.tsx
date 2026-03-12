@@ -135,8 +135,8 @@ export default function OnboardingScreen() {
         setProfile(updatedProfile);
       }
       
-      // Navigate to invite flow (viral growth feature)
-      router.replace('/circle/create');
+      // Navigate to circle choice (join or create)
+      router.replace('/circle/choice');
     } catch (error: any) {
       console.error('Onboarding error:', error);
       
