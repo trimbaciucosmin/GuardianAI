@@ -44,8 +44,12 @@ export default function JoinCircleScreen() {
   };
 
   const handleJoin = async () => {
+    console.log('=== JOIN BUTTON PRESSED ===');
+    console.log('Code value:', code);
+    console.log('User:', user?.id);
+    
     if (typeof window !== 'undefined') {
-      window.alert('Se procesează codul...');
+      window.alert('Se procesează codul: ' + code);
     }
     
     const cleanCode = code.trim().toUpperCase();
