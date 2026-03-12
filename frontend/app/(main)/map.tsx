@@ -59,21 +59,21 @@ export default function MapScreen() {
     }
 
     try {
-      // Fetch members with their locations
+      // Fetch circle members (without nested join)
       const { data: membersData, error: membersError } = await supabase
         .from('circle_members')
-        .select(`
-          id,
-          user_id,
-          role,
-          profiles (
-            name,
-            avatar_url
-          )
-        `)
+        .select('id, user_id, role')
         .eq('circle_id', currentCircle.id);
 
       if (membersError) throw membersError;
+
+      const memberIds = membersData?.map(m => m.user_id) || [];
+
+      // Fetch profiles separately
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('user_id, name, avatar_url')
+        .in('user_id', memberIds);
 
       // Fetch live locations
       const { data: locationsData } = await supabase
@@ -82,7 +82,6 @@ export default function MapScreen() {
         .eq('circle_id', currentCircle.id);
 
       // Fetch device status
-      const memberIds = membersData?.map(m => m.user_id) || [];
       const { data: deviceData } = await supabase
         .from('device_status')
         .select('*')
@@ -90,6 +89,7 @@ export default function MapScreen() {
 
       // Combine data
       const formattedMembers: FamilyMember[] = (membersData || []).map((member: any, index: number) => {
+        const profile = profilesData?.find((p: any) => p.user_id === member.user_id);
         const location = locationsData?.find((l: any) => l.user_id === member.user_id);
         const device = deviceData?.find((d: any) => d.user_id === member.user_id);
         
@@ -100,7 +100,7 @@ export default function MapScreen() {
         return {
           id: member.id,
           user_id: member.user_id,
-          name: member.profiles?.name || 'Unknown',
+          name: profile?.name || 'Unknown',
           status: 'safe' as const,
           place: 'Current Location',
           placeName: location ? 'Live location' : 'Location pending',

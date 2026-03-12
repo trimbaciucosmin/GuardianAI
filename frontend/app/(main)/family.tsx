@@ -94,20 +94,10 @@ export default function FamilyScreen() {
     if (!user) return;
     
     try {
-      // Fetch user's circles
-      const { data: circlesData, error: circlesError } = await supabase
+      // Fetch user's circle memberships
+      const { data: membershipData, error: circlesError } = await supabase
         .from('circle_members')
-        .select(`
-          circle_id,
-          role,
-          family_circles (
-            id,
-            name,
-            invite_code,
-            created_by,
-            created_at
-          )
-        `)
+        .select('circle_id, role')
         .eq('user_id', user.id);
 
       if (circlesError) {
@@ -115,8 +105,15 @@ export default function FamilyScreen() {
         return;
       }
 
-      if (circlesData && circlesData.length > 0) {
-        const circlesList = circlesData.map((cm: any) => cm.family_circles).filter(Boolean);
+      if (membershipData && membershipData.length > 0) {
+        // Fetch the actual circle details
+        const circleIds = membershipData.map((m: any) => m.circle_id);
+        const { data: circlesData } = await supabase
+          .from('family_circles')
+          .select('id, name, invite_code, created_by, created_at')
+          .in('id', circleIds);
+
+        const circlesList = circlesData || [];
         setCircles(circlesList);
         
         // Use first circle as current if none selected
@@ -124,26 +121,22 @@ export default function FamilyScreen() {
         if (activeCircle) {
           setCurrentCircle(activeCircle);
           
-          // Fetch members with profiles
+          // Fetch members (without nested profiles join)
           const { data: membersData, error: membersError } = await supabase
             .from('circle_members')
-            .select(`
-              id,
-              user_id,
-              role,
-              joined_at,
-              profiles (
-                name,
-                avatar_url,
-                phone
-              )
-            `)
+            .select('id, user_id, role, joined_at')
             .eq('circle_id', activeCircle.id);
 
           if (!membersError && membersData) {
-            // Fetch device status and locations for each member
             const memberIds = membersData.map((m: any) => m.user_id);
             
+            // Fetch profiles separately
+            const { data: profilesData } = await supabase
+              .from('profiles')
+              .select('user_id, name, avatar_url, phone')
+              .in('user_id', memberIds);
+
+            // Fetch device status and locations for each member
             const { data: deviceData } = await supabase
               .from('device_status')
               .select('*')
@@ -155,13 +148,18 @@ export default function FamilyScreen() {
               .eq('circle_id', activeCircle.id);
 
             const formattedMembers: MemberWithDetails[] = membersData.map((m: any) => {
+              const profile = profilesData?.find((p: any) => p.user_id === m.user_id);
               const device = deviceData?.find((d: any) => d.user_id === m.user_id);
               const location = locationData?.find((l: any) => l.user_id === m.user_id);
               const lastSeenTime = device?.last_seen || location?.timestamp;
               
               return {
                 ...m,
-                profile: m.profiles,
+                profile: profile ? {
+                  name: profile.name,
+                  avatar_url: profile.avatar_url,
+                  phone: profile.phone,
+                } : undefined,
                 device_status: device ? {
                   battery_level: device.battery_level,
                   last_seen: device.last_seen,
