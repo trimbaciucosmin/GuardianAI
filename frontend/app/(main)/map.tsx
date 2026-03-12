@@ -54,12 +54,16 @@ export default function MapScreen() {
 
   const userName = profile?.name?.split(' ')[0] || 'there';
   const tabBarHeight = 56 + insets.bottom;
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   // Get current user's real location
   const getCurrentLocation = useCallback(async () => {
     try {
+      setLocationError(null);
+      
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
+        setLocationError('Location permission denied. Please enable in settings.');
         console.log('Location permission denied');
         return null;
       }
@@ -73,18 +77,19 @@ export default function MapScreen() {
         longitude: location.coords.longitude,
       };
       
+      console.log('Got real location:', coords);
       setMyLocation(coords);
       
       // Update map region to center on user's location
       setMapRegion({
         ...coords,
-        latitudeDelta: 0.02,
-        longitudeDelta: 0.02,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
       });
 
       // Save location to database if we have a circle
       if (currentCircle && user) {
-        await supabase
+        const { error } = await supabase
           .from('live_locations')
           .upsert({
             user_id: user.id,
@@ -92,18 +97,37 @@ export default function MapScreen() {
             latitude: coords.latitude,
             longitude: coords.longitude,
             accuracy: location.coords.accuracy || 10,
-            battery_level: 85, // Would get from device API
+            battery_level: 85,
             is_moving: false,
             timestamp: new Date().toISOString(),
           }, { onConflict: 'user_id,circle_id' });
+        
+        if (error) {
+          console.log('Error saving location:', error);
+        } else {
+          console.log('Location saved to database');
+        }
       }
 
       return coords;
     } catch (error) {
       console.log('Error getting location:', error);
+      setLocationError('Could not get location. Please try again.');
       return null;
     }
   }, [currentCircle, user]);
+
+  // Center map on user's current location
+  const centerOnMe = async () => {
+    const coords = await getCurrentLocation();
+    if (coords) {
+      setMapRegion({
+        ...coords,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      });
+    }
+  };
 
   // Get location on mount
   useEffect(() => {
@@ -457,6 +481,23 @@ export default function MapScreen() {
                 ))}
               </View>
             )}
+          </View>
+        )}
+
+        {/* Center on Me Button */}
+        <TouchableOpacity 
+          style={styles.centerButton}
+          onPress={centerOnMe}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="locate" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+
+        {/* Location Error Banner */}
+        {locationError && (
+          <View style={styles.errorBanner}>
+            <Ionicons name="warning" size={18} color="#F59E0B" />
+            <Text style={styles.errorText}>{locationError}</Text>
           </View>
         )}
 
@@ -836,5 +877,40 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  // Center on me button
+  centerButton: {
+    position: 'absolute',
+    right: 16,
+    top: 240,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#6366F1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  // Error banner
+  errorBanner: {
+    position: 'absolute',
+    top: 300,
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderRadius: 12,
+    padding: 12,
+    gap: 10,
+  },
+  errorText: {
+    flex: 1,
+    color: '#F59E0B',
+    fontSize: 13,
   },
 });
