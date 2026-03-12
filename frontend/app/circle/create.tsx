@@ -22,11 +22,31 @@ import { generateInviteCode } from '../../utils/helpers';
 
 export default function CreateCircleScreen() {
   const router = useRouter();
-  const { user, profile } = useAuthStore();
+  const { user, profile, setUser, setProfile } = useAuthStore();
   const { addCircle, setCurrentCircle } = useCircleStore();
   const [name, setName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [createdCircle, setCreatedCircle] = useState<{ id: string; invite_code: string } | null>(null);
+
+  const handleSignOut = async () => {
+    Alert.alert(
+      'Sign Out',
+      'Ești sigur că vrei să te deconectezi?',
+      [
+        { text: 'Anulează', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            await supabase.auth.signOut();
+            setUser(null);
+            setProfile(null);
+            router.replace('/(auth)/login');
+          }
+        }
+      ]
+    );
+  };
 
   const handleCreate = async () => {
     if (!name.trim()) {
@@ -284,6 +304,12 @@ This app lets us share locations and stay safe!`;
           >
             <Ionicons name="enter" size={20} color="#6366F1" />
             <Text style={styles.joinButtonText}>Join Existing Circle</Text>
+          </TouchableOpacity>
+
+          {/* Sign Out Button */}
+          <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+            <Ionicons name="log-out" size={18} color="#EF4444" />
+            <Text style={styles.signOutText}>Sign Out</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -550,5 +576,16 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     fontSize: 16,
     color: '#64748B',
+  },
+  signOutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 24,
+    gap: 8,
+  },
+  signOutText: {
+    fontSize: 14,
+    color: '#EF4444',
   },
 });

@@ -18,10 +18,30 @@ import { useAuthStore, useCircleStore } from '../../lib/store';
 
 export default function JoinCircleScreen() {
   const router = useRouter();
-  const { user, profile } = useAuthStore();
+  const { user, profile, setUser, setProfile } = useAuthStore();
   const { addCircle, setCurrentCircle } = useCircleStore();
   const [code, setCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  const handleSignOut = async () => {
+    Alert.alert(
+      'Sign Out',
+      'Ești sigur că vrei să te deconectezi?',
+      [
+        { text: 'Anulează', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            await supabase.auth.signOut();
+            setUser(null);
+            setProfile(null);
+            router.replace('/(auth)/login');
+          }
+        }
+      ]
+    );
+  };
 
   const handleJoin = async () => {
     const cleanCode = code.trim().toUpperCase();
@@ -162,6 +182,12 @@ export default function JoinCircleScreen() {
           >
             <Text style={styles.createLinkText}>Create a new circle</Text>
           </TouchableOpacity>
+
+          {/* Sign Out Button */}
+          <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+            <Ionicons name="log-out" size={18} color="#EF4444" />
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -291,5 +317,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#6366F1',
+  },
+  signOutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 24,
+    gap: 8,
+  },
+  signOutText: {
+    fontSize: 14,
+    color: '#EF4444',
   },
 });
