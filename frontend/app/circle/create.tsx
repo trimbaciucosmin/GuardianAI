@@ -85,9 +85,24 @@ export default function CreateCircleScreen() {
   const handleShare = async () => {
     if (!createdCircle) return;
     
+    const appUrl = 'https://guardian-mobile-app.preview.emergentagent.com';
+    const inviteMessage = `🛡️ Join my Family Safety Circle on Guardian AI!
+
+📱 STEP 1: Open the app
+${appUrl}
+
+📝 STEP 2: Create an account or sign in
+
+🔑 STEP 3: Go to Family tab → Join Circle
+
+✨ STEP 4: Enter this code:
+${createdCircle.invite_code}
+
+Guardian AI helps families stay connected and safe with real-time location sharing and arrival alerts.`;
+
     try {
       const result = await Share.share({
-        message: `Join my family safety circle on Guardian AI!\n\nUse this invite code: ${createdCircle.invite_code}\n\nDownload the app and enter this code to join our family circle.`,
+        message: inviteMessage,
         title: 'Join My Family Circle',
       });
       
@@ -104,11 +119,14 @@ export default function CreateCircleScreen() {
   const handleCopyCode = async () => {
     if (!createdCircle) return;
     
+    const appUrl = 'https://guardian-mobile-app.preview.emergentagent.com';
+    const fullMessage = `Join my family on Guardian AI!\n\nApp: ${appUrl}\nCode: ${createdCircle.invite_code}`;
+    
     try {
-      await Clipboard.setStringAsync(createdCircle.invite_code);
+      await Clipboard.setStringAsync(fullMessage);
       Alert.alert(
-        'Code Copied!',
-        `Invite code "${createdCircle.invite_code}" has been copied to your clipboard.\n\nShare it with family members to invite them.`,
+        'Copied!',
+        `Invite code "${createdCircle.invite_code}" and app link copied to clipboard.\n\nShare it with family members to invite them.`,
         [{ text: 'OK' }]
       );
     } catch (error) {
@@ -116,7 +134,7 @@ export default function CreateCircleScreen() {
       // Fallback - just show the code
       Alert.alert(
         'Invite Code',
-        `${createdCircle.invite_code}\n\nManually copy this code and share it with family members.`,
+        `Code: ${createdCircle.invite_code}\n\nApp: ${appUrl}\n\nManually copy and share with family members.`,
         [{ text: 'OK' }]
       );
     }

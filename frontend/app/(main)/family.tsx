@@ -240,22 +240,37 @@ export default function FamilyScreen() {
 
   const copyInviteCode = async () => {
     if (currentCircle?.invite_code) {
+      const appUrl = 'https://guardian-mobile-app.preview.emergentagent.com';
+      const inviteMessage = `🛡️ Join my Family Safety Circle on Guardian AI!
+
+📱 STEP 1: Open the app
+${appUrl}
+
+📝 STEP 2: Create an account or sign in
+
+🔑 STEP 3: Go to Family tab → Join Circle
+
+✨ STEP 4: Enter this code:
+${currentCircle.invite_code}
+
+Guardian AI helps families stay connected and safe with real-time location sharing and arrival alerts.`;
+
       try {
         // Copy to clipboard
-        await Clipboard.setStringAsync(currentCircle.invite_code);
+        await Clipboard.setStringAsync(inviteMessage);
         
         // Show options to share or just confirm copy
         Alert.alert(
           'Invite Code Copied!',
-          `Code: ${currentCircle.invite_code}\n\nShare it with family members to invite them.`,
+          `Code: ${currentCircle.invite_code}\n\nThe full invitation with app link has been copied.`,
           [
             { text: 'OK', style: 'cancel' },
             { 
-              text: 'Share', 
+              text: 'Share Now', 
               onPress: async () => {
                 try {
                   await Share.share({
-                    message: `Join my family safety circle on Guardian AI!\n\nUse this invite code: ${currentCircle.invite_code}\n\nDownload the app and enter this code to join.`,
+                    message: inviteMessage,
                     title: 'Join My Family Circle',
                   });
                 } catch (e) {
@@ -269,7 +284,7 @@ export default function FamilyScreen() {
         // Fallback if clipboard fails
         Alert.alert(
           'Invite Code',
-          `${currentCircle.invite_code}\n\nShare this code with family members.`,
+          `Code: ${currentCircle.invite_code}\n\nApp: ${appUrl}\n\nShare this with family members.`,
           [{ text: 'OK' }]
         );
       }
