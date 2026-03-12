@@ -6,8 +6,8 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Mock data for activity timeline
 const mockTimeline = [
@@ -44,21 +44,28 @@ const getSafetyStatus = (score: number) => {
 };
 
 export default function ActivityScreen() {
+  const insets = useSafeAreaInsets();
   const [selectedDay, setSelectedDay] = useState('Today');
   const safetyScore = calculateSafetyScore();
   const safetyStatus = getSafetyStatus(safetyScore);
 
   const days = ['Today', 'Yesterday', 'This Week'];
+  
+  // Tab bar height
+  const tabBarHeight = 60 + insets.bottom;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Text style={styles.title}>Activity</Text>
         <Text style={styles.subtitle}>Daily Safety Report</Text>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: tabBarHeight + 16 }}
+      >
         {/* Safety Score Card */}
         <View style={styles.scoreCard}>
           <View style={styles.scoreHeader}>
@@ -151,7 +158,7 @@ export default function ActivityScreen() {
           ))}
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 

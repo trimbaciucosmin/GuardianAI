@@ -7,9 +7,9 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore, useCircleStore } from '../../lib/store';
 
@@ -31,8 +31,12 @@ const mockFamily = {
 
 export default function FamilyScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { profile, setUser, setProfile } = useAuthStore();
   const [showInviteCode, setShowInviteCode] = useState(false);
+  
+  // Tab bar height
+  const tabBarHeight = 60 + insets.bottom;
 
   const handleLogout = async () => {
     Alert.alert(
@@ -61,16 +65,19 @@ export default function FamilyScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Text style={styles.title}>Family</Text>
         <TouchableOpacity style={styles.settingsButton} onPress={() => router.push('/settings')}>
           <Ionicons name="settings-outline" size={24} color="#94A3B8" />
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: tabBarHeight + 16 }}
+      >
         {/* Family Card */}
         <View style={styles.familyCard}>
           <View style={styles.familyHeader}>
@@ -195,7 +202,7 @@ export default function FamilyScreen() {
 
         <View style={{ height: 32 }} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 

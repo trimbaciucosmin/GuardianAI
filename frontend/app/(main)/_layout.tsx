@@ -2,27 +2,46 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { View, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function MainLayout() {
+  const insets = useSafeAreaInsets();
+  
+  // Calculate proper tab bar height with safe area
+  const tabBarHeight = 60 + insets.bottom;
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: {
+          backgroundColor: '#0F172A',
+          borderTopWidth: 0,
+          height: tabBarHeight,
+          paddingTop: 8,
+          paddingBottom: insets.bottom + 8,
+          elevation: 0,
+          shadowOpacity: 0,
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+        },
         tabBarActiveTintColor: '#6366F1',
         tabBarInactiveTintColor: '#64748B',
-        tabBarLabelStyle: styles.tabLabel,
-        tabBarIconStyle: styles.tabIcon,
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
+          marginTop: 4,
+        },
       }}
     >
       <Tabs.Screen
         name="map"
         options={{
           title: 'Map',
-          tabBarIcon: ({ color, size }) => (
-            <View style={styles.iconContainer}>
-              <Ionicons name="location" size={28} color={color} />
-            </View>
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="location" size={26} color={color} />
           ),
         }}
       />
@@ -30,10 +49,8 @@ export default function MainLayout() {
         name="activity"
         options={{
           title: 'Activity',
-          tabBarIcon: ({ color, size }) => (
-            <View style={styles.iconContainer}>
-              <Ionicons name="pulse" size={28} color={color} />
-            </View>
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="pulse" size={26} color={color} />
           ),
         }}
       />
@@ -41,10 +58,8 @@ export default function MainLayout() {
         name="phone"
         options={{
           title: 'Phone',
-          tabBarIcon: ({ color, size }) => (
-            <View style={styles.iconContainer}>
-              <Ionicons name="phone-portrait" size={28} color={color} />
-            </View>
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="phone-portrait" size={26} color={color} />
           ),
         }}
       />
@@ -52,14 +67,11 @@ export default function MainLayout() {
         name="family"
         options={{
           title: 'Family',
-          tabBarIcon: ({ color, size }) => (
-            <View style={styles.iconContainer}>
-              <Ionicons name="people" size={28} color={color} />
-            </View>
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="people" size={26} color={color} />
           ),
         }}
       />
-      {/* Hide alerts from tabs - it's now part of Activity */}
       <Tabs.Screen
         name="alerts"
         options={{
@@ -69,27 +81,3 @@ export default function MainLayout() {
     </Tabs>
   );
 }
-
-const styles = StyleSheet.create({
-  tabBar: {
-    backgroundColor: '#0F172A',
-    borderTopWidth: 0,
-    height: Platform.OS === 'ios' ? 88 : 70,
-    paddingTop: 8,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 12,
-    elevation: 0,
-    shadowOpacity: 0,
-  },
-  tabLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  tabIcon: {
-    marginBottom: -4,
-  },
-  iconContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

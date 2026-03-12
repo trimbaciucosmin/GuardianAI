@@ -7,8 +7,8 @@ import {
   ScrollView,
   Switch,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Mock data for screen time
 const mockApps = [
@@ -25,21 +25,28 @@ const mockBlockedApps = [
 ];
 
 export default function PhoneScreen() {
+  const insets = useSafeAreaInsets();
   const [sleepModeEnabled, setSleepModeEnabled] = useState(true);
   const [selectedChild, setSelectedChild] = useState('Emma');
   
   const totalScreenTime = mockApps.reduce((sum, app) => sum + app.time, 0);
   const children = ['Emma', 'Jake'];
+  
+  // Tab bar height
+  const tabBarHeight = 60 + insets.bottom;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Text style={styles.title}>Phone</Text>
         <Text style={styles.subtitle}>Digital Safety Controls</Text>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: tabBarHeight + 16 }}
+      >
         {/* Child Selector */}
         <View style={styles.childSelector}>
           {children.map((child) => (
@@ -177,7 +184,7 @@ export default function PhoneScreen() {
 
         <View style={{ height: 32 }} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
