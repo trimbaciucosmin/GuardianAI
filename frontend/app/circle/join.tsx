@@ -44,21 +44,26 @@ export default function JoinCircleScreen() {
   };
 
   const handleJoin = async () => {
-    const cleanCode = code.trim().toUpperCase();
+    Alert.alert('Info', 'Se procesează codul...');
     
-    if (!cleanCode || cleanCode.length !== 6) {
-      Alert.alert('Invalid Code', 'Please enter a 6-character invite code');
+    const cleanCode = code.trim().toUpperCase();
+    console.log('Join code entered:', cleanCode, 'Length:', cleanCode.length);
+    
+    if (!cleanCode || cleanCode.length < 4) {
+      Alert.alert('Cod Invalid', 'Te rugăm să introduci codul de invitație');
       return;
     }
 
     if (!user) {
-      Alert.alert('Error', 'You must be logged in');
+      Alert.alert('Eroare', 'Trebuie să fii autentificat');
       return;
     }
 
     setIsLoading(true);
 
     try {
+      console.log('Searching for circle with code:', cleanCode);
+      
       // Find circle by invite code
       const { data: circleData, error: circleError } = await supabase
         .from('family_circles')
@@ -66,8 +71,10 @@ export default function JoinCircleScreen() {
         .eq('invite_code', cleanCode)
         .single();
 
+      console.log('Circle search result:', { circleData, circleError });
+
       if (circleError || !circleData) {
-        Alert.alert('Circle Not Found', 'No circle found with this invite code');
+        Alert.alert('Cercul nu a fost găsit', 'Nu există niciun cerc cu acest cod de invitație. Verifică codul și încearcă din nou.');
         setIsLoading(false);
         return;
       }
@@ -81,10 +88,13 @@ export default function JoinCircleScreen() {
         .single();
 
       if (existingMember) {
-        Alert.alert('Already a Member', 'You are already a member of this circle');
+        Alert.alert('Deja membru', 'Ești deja membru al acestui cerc');
         setIsLoading(false);
+        router.replace('/(main)/family');
         return;
       }
+
+      console.log('Adding user to circle...');
 
       // Add as member
       const { error: memberError } = await supabase
@@ -96,19 +106,24 @@ export default function JoinCircleScreen() {
           joined_at: new Date().toISOString(),
         });
 
-      if (memberError) throw memberError;
+      if (memberError) {
+        console.error('Member insert error:', memberError);
+        throw memberError;
+      }
 
+      console.log('Successfully joined circle!');
+      
       addCircle(circleData);
       setCurrentCircle(circleData);
 
       Alert.alert(
-        'Welcome!',
-        `You've joined ${circleData.name}`,
+        'Bine ai venit!',
+        `Te-ai alăturat cercului "${circleData.name}"`,
         [{ text: 'OK', onPress: () => router.replace('/(main)/family') }]
       );
     } catch (error: any) {
       console.error('Join circle error:', error);
-      Alert.alert('Error', error.message || 'Failed to join circle');
+      Alert.alert('Eroare', error.message || 'Nu s-a putut alătura cercului');
     } finally {
       setIsLoading(false);
     }
