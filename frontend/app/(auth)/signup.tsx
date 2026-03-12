@@ -56,15 +56,16 @@ export default function SignupScreen() {
   };
 
   const handleSignup = async () => {
-    // Debug alert - remove after testing
-    console.log('=== SIGNUP BUTTON PRESSED ===');
+    // Immediate feedback
+    Alert.alert('Info', 'Butonul funcționează! Se procesează...');
     
-    console.log('=== SIGNUP STARTED ===');
+    console.log('=== SIGNUP BUTTON PRESSED ===');
     console.log('Email:', email);
     console.log('Password length:', password.length);
     
     if (!validateForm()) {
-      console.log('Form validation failed:', errors);
+      console.log('Form validation failed');
+      Alert.alert('Eroare', 'Te rugăm să completezi toate câmpurile corect.');
       return;
     }
 
