@@ -81,9 +81,30 @@ export default function SignupScreen() {
       }
 
       if (data.user) {
+        // Check if email confirmation is required
+        if (data.user.identities && data.user.identities.length === 0) {
+          Alert.alert(
+            'Email Already Registered',
+            'This email is already registered. Please sign in or use a different email.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+        
+        // Check if email needs to be confirmed
+        if (data.session === null) {
+          Alert.alert(
+            'Verifică Email-ul',
+            'Ți-am trimis un email de confirmare. Te rugăm să verifici inbox-ul și să confirmi adresa de email pentru a continua.',
+            [{ text: 'OK', onPress: () => router.replace('/(auth)/login') }]
+          );
+          return;
+        }
+        
         router.replace('/(auth)/onboarding');
       }
     } catch (error: any) {
+      console.error('Signup error:', error);
       Alert.alert('Error', error.message || 'Something went wrong');
     } finally {
       setIsLoading(false);
