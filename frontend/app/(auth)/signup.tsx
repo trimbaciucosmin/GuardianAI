@@ -56,8 +56,10 @@ export default function SignupScreen() {
   };
 
   const handleSignup = async () => {
-    // Immediate feedback
-    Alert.alert('Info', 'Butonul funcționează! Se procesează...');
+    // Use window.alert for web compatibility
+    if (typeof window !== 'undefined') {
+      window.alert('Se procesează...');
+    }
     
     console.log('=== SIGNUP BUTTON PRESSED ===');
     console.log('Email:', email);
@@ -65,7 +67,9 @@ export default function SignupScreen() {
     
     if (!validateForm()) {
       console.log('Form validation failed');
-      Alert.alert('Eroare', 'Te rugăm să completezi toate câmpurile corect.');
+      if (typeof window !== 'undefined') {
+        window.alert('Te rugăm să completezi toate câmpurile corect.');
+      }
       return;
     }
 
@@ -73,11 +77,9 @@ export default function SignupScreen() {
 
     if (!isSupabaseConfigured()) {
       console.log('Supabase not configured');
-      Alert.alert(
-        'Configuration Required',
-        'Please configure Supabase credentials in your .env file:\n\nEXPO_PUBLIC_SUPABASE_URL=your-url\nEXPO_PUBLIC_SUPABASE_ANON_KEY=your-key',
-        [{ text: 'OK' }]
-      );
+      if (typeof window !== 'undefined') {
+        window.alert('Supabase nu este configurat');
+      }
       return;
     }
 
@@ -91,11 +93,14 @@ export default function SignupScreen() {
         password,
       });
 
-      console.log('Signup response:', { data, error });
+      console.log('Signup response:', JSON.stringify({ data, error }));
 
       if (error) {
         console.log('Signup error:', error);
-        Alert.alert('Signup Failed', error.message);
+        if (typeof window !== 'undefined') {
+          window.alert('Eroare: ' + error.message);
+        }
+        setIsLoading(false);
         return;
       }
 

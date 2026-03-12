@@ -44,18 +44,24 @@ export default function JoinCircleScreen() {
   };
 
   const handleJoin = async () => {
-    Alert.alert('Info', 'Se procesează codul...');
+    if (typeof window !== 'undefined') {
+      window.alert('Se procesează codul...');
+    }
     
     const cleanCode = code.trim().toUpperCase();
     console.log('Join code entered:', cleanCode, 'Length:', cleanCode.length);
     
     if (!cleanCode || cleanCode.length < 4) {
-      Alert.alert('Cod Invalid', 'Te rugăm să introduci codul de invitație');
+      if (typeof window !== 'undefined') {
+        window.alert('Te rugăm să introduci codul de invitație');
+      }
       return;
     }
 
     if (!user) {
-      Alert.alert('Eroare', 'Trebuie să fii autentificat');
+      if (typeof window !== 'undefined') {
+        window.alert('Trebuie să fii autentificat');
+      }
       return;
     }
 
@@ -74,7 +80,9 @@ export default function JoinCircleScreen() {
       console.log('Circle search result:', { circleData, circleError });
 
       if (circleError || !circleData) {
-        Alert.alert('Cercul nu a fost găsit', 'Nu există niciun cerc cu acest cod de invitație. Verifică codul și încearcă din nou.');
+        if (typeof window !== 'undefined') {
+          window.alert('Cercul nu a fost găsit. Verifică codul și încearcă din nou.');
+        }
         setIsLoading(false);
         return;
       }
@@ -88,7 +96,9 @@ export default function JoinCircleScreen() {
         .single();
 
       if (existingMember) {
-        Alert.alert('Deja membru', 'Ești deja membru al acestui cerc');
+        if (typeof window !== 'undefined') {
+          window.alert('Ești deja membru al acestui cerc!');
+        }
         setIsLoading(false);
         router.replace('/(main)/family');
         return;
@@ -108,7 +118,11 @@ export default function JoinCircleScreen() {
 
       if (memberError) {
         console.error('Member insert error:', memberError);
-        throw memberError;
+        if (typeof window !== 'undefined') {
+          window.alert('Eroare: ' + memberError.message);
+        }
+        setIsLoading(false);
+        return;
       }
 
       console.log('Successfully joined circle!');
@@ -116,14 +130,15 @@ export default function JoinCircleScreen() {
       addCircle(circleData);
       setCurrentCircle(circleData);
 
-      Alert.alert(
-        'Bine ai venit!',
-        `Te-ai alăturat cercului "${circleData.name}"`,
-        [{ text: 'OK', onPress: () => router.replace('/(main)/family') }]
-      );
+      if (typeof window !== 'undefined') {
+        window.alert('Bine ai venit! Te-ai alăturat cercului "' + circleData.name + '"');
+      }
+      router.replace('/(main)/family');
     } catch (error: any) {
       console.error('Join circle error:', error);
-      Alert.alert('Eroare', error.message || 'Nu s-a putut alătura cercului');
+      if (typeof window !== 'undefined') {
+        window.alert('Eroare: ' + (error.message || 'Nu s-a putut alătura cercului'));
+      }
     } finally {
       setIsLoading(false);
     }

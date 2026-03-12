@@ -45,14 +45,17 @@ export default function LoginScreen() {
   };
 
   const handleLogin = async () => {
-    if (!validateForm()) return;
+    if (!validateForm()) {
+      if (typeof window !== 'undefined') {
+        window.alert('Te rugăm să completezi email și parola.');
+      }
+      return;
+    }
 
     if (!isSupabaseConfigured()) {
-      Alert.alert(
-        'Configuration Required',
-        'Please configure Supabase credentials in your .env file:\n\nEXPO_PUBLIC_SUPABASE_URL=your-url\nEXPO_PUBLIC_SUPABASE_ANON_KEY=your-key',
-        [{ text: 'OK' }]
-      );
+      if (typeof window !== 'undefined') {
+        window.alert('Supabase nu este configurat.');
+      }
       return;
     }
 
@@ -65,7 +68,10 @@ export default function LoginScreen() {
       });
 
       if (error) {
-        Alert.alert('Login Failed', error.message);
+        if (typeof window !== 'undefined') {
+          window.alert('Eroare la autentificare: ' + error.message);
+        }
+        setIsLoading(false);
         return;
       }
 
@@ -87,7 +93,9 @@ export default function LoginScreen() {
         }
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Something went wrong');
+      if (typeof window !== 'undefined') {
+        window.alert('Eroare: ' + (error.message || 'Ceva nu a mers bine'));
+      }
     } finally {
       setIsLoading(false);
     }
