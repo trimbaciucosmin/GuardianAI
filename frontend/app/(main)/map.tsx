@@ -7,12 +7,14 @@ import {
   Dimensions,
   Platform,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import * as Location from 'expo-location';
 import { useAuthStore, useCircleStore, useLocationStore } from '../../lib/store';
 import { supabase } from '../../lib/supabase';
 
@@ -42,6 +44,7 @@ export default function MapScreen() {
   const [loading, setLoading] = useState(true);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [selectedMember, setSelectedMember] = useState<FamilyMember | null>(null);
+  const [myLocation, setMyLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [mapRegion, setMapRegion] = useState({
     latitude: 40.7128,
     longitude: -74.0060,
@@ -51,6 +54,61 @@ export default function MapScreen() {
 
   const userName = profile?.name?.split(' ')[0] || 'there';
   const tabBarHeight = 56 + insets.bottom;
+
+  // Get current user's real location
+  const getCurrentLocation = useCallback(async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('Location permission denied');
+        return null;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      
+      const coords = {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      };
+      
+      setMyLocation(coords);
+      
+      // Update map region to center on user's location
+      setMapRegion({
+        ...coords,
+        latitudeDelta: 0.02,
+        longitudeDelta: 0.02,
+      });
+
+      // Save location to database if we have a circle
+      if (currentCircle && user) {
+        await supabase
+          .from('live_locations')
+          .upsert({
+            user_id: user.id,
+            circle_id: currentCircle.id,
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+            accuracy: location.coords.accuracy || 10,
+            battery_level: 85, // Would get from device API
+            is_moving: false,
+            timestamp: new Date().toISOString(),
+          }, { onConflict: 'user_id,circle_id' });
+      }
+
+      return coords;
+    } catch (error) {
+      console.log('Error getting location:', error);
+      return null;
+    }
+  }, [currentCircle, user]);
+
+  // Get location on mount
+  useEffect(() => {
+    getCurrentLocation();
+  }, []);
 
   const fetchFamilyLocations = useCallback(async () => {
     if (!currentCircle || !user) {
@@ -87,15 +145,23 @@ export default function MapScreen() {
         .select('*')
         .in('user_id', memberIds);
 
-      // Combine data
+      // Combine data - use real location for current user if available
       const formattedMembers: FamilyMember[] = (membersData || []).map((member: any, index: number) => {
         const profile = profilesData?.find((p: any) => p.user_id === member.user_id);
         const location = locationsData?.find((l: any) => l.user_id === member.user_id);
         const device = deviceData?.find((d: any) => d.user_id === member.user_id);
         
-        // Default location with slight offset for demo
-        const defaultLat = 40.7128 + (index * 0.003);
-        const defaultLng = -74.0060 + (index * 0.003);
+        // Use real location for current user, or database location, or default
+        const isCurrentUser = member.user_id === user.id;
+        const defaultLat = myLocation?.latitude || 40.7128 + (index * 0.003);
+        const defaultLng = myLocation?.longitude || -74.0060 + (index * 0.003);
+        
+        const memberLat = isCurrentUser && myLocation 
+          ? myLocation.latitude 
+          : (location?.latitude || defaultLat);
+        const memberLng = isCurrentUser && myLocation 
+          ? myLocation.longitude 
+          : (location?.longitude || defaultLng);
         
         return {
           id: member.id,
@@ -103,27 +169,36 @@ export default function MapScreen() {
           name: profile?.name || 'Unknown',
           status: 'safe' as const,
           place: 'Current Location',
-          placeName: location ? 'Live location' : 'Location pending',
-          lastSeen: location?.timestamp ? formatLastSeen(location.timestamp) : 'Recently',
+          placeName: location || (isCurrentUser && myLocation) ? 'Live location' : 'Location pending',
+          lastSeen: location?.timestamp ? formatLastSeen(location.timestamp) : (isCurrentUser ? 'Now' : 'Recently'),
           battery: device?.battery_level || location?.battery_level || 85,
-          isOnline: device?.last_seen ? isRecent(device.last_seen) : true,
-          latitude: location?.latitude || defaultLat,
-          longitude: location?.longitude || defaultLng,
+          isOnline: isCurrentUser ? true : (device?.last_seen ? isRecent(device.last_seen) : true),
+          latitude: memberLat,
+          longitude: memberLng,
         };
       });
 
       setFamilyMembers(formattedMembers);
       
-      // Set selected member (prefer current user or first member)
-      const currentUser = formattedMembers.find(m => m.user_id === user.id);
+      // Set selected member (prefer other members over current user)
+      const currentUserMember = formattedMembers.find(m => m.user_id === user.id);
       const firstOther = formattedMembers.find(m => m.user_id !== user.id);
-      setSelectedMember(firstOther || currentUser || formattedMembers[0] || null);
+      setSelectedMember(firstOther || currentUserMember || formattedMembers[0] || null);
 
-      // Center map on first member
-      if (formattedMembers.length > 0) {
+      // Center map on selected member or first member with location
+      const memberToCenter = firstOther || currentUserMember || formattedMembers[0];
+      if (memberToCenter) {
         setMapRegion({
-          latitude: formattedMembers[0].latitude,
-          longitude: formattedMembers[0].longitude,
+          latitude: memberToCenter.latitude,
+          longitude: memberToCenter.longitude,
+          latitudeDelta: 0.02,
+          longitudeDelta: 0.02,
+        });
+      } else if (myLocation) {
+        // If no members, center on user's location
+        setMapRegion({
+          latitude: myLocation.latitude,
+          longitude: myLocation.longitude,
           latitudeDelta: 0.02,
           longitudeDelta: 0.02,
         });
@@ -133,12 +208,13 @@ export default function MapScreen() {
     } finally {
       setLoading(false);
     }
-  }, [currentCircle, user]);
+  }, [currentCircle, user, myLocation]);
 
   useFocusEffect(
     useCallback(() => {
+      getCurrentLocation(); // Refresh location when screen is focused
       fetchFamilyLocations();
-    }, [fetchFamilyLocations])
+    }, [fetchFamilyLocations, getCurrentLocation])
   );
 
   const formatLastSeen = (timestamp: string): string => {
