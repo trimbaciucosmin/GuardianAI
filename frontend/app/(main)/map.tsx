@@ -1,500 +1,149 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Alert,
-  Platform,
-  ActivityIndicator,
-  Dimensions,
   ScrollView,
+  Platform,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore, useLocationStore, useCircleStore, usePlacesStore, useSOSStore, useTripStore, useRealtimeStore } from '../../lib/store';
-import { supabase } from '../../lib/supabase';
-import { getInitials, getAvatarColor, getBatteryColor, formatRelativeTime } from '../../utils/helpers';
-import { MapMember, LiveLocation } from '../../types';
-import { useLocationTracking } from '../../hooks/useLocationTracking';
-import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription';
-import TrackingStatusCard from '../../components/TrackingStatusCard';
+import { useAuthStore, useCircleStore, useLocationStore } from '../../lib/store';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
+
+// Mock data for family members
+const mockFamilyMembers = [
+  { id: '1', name: 'Emma', role: 'child', status: 'safe', location: 'School', lastSeen: 'Now', battery: 85 },
+  { id: '2', name: 'Jake', role: 'child', status: 'moving', location: 'On the way', lastSeen: 'Now', battery: 62 },
+];
 
 export default function MapScreen() {
   const router = useRouter();
-  const { user, profile } = useAuthStore();
-  const { currentCircle, members, setCurrentCircle, setMembers, circles, setCircles } = useCircleStore();
-  const { mapMembers, setMapMembers, updateMapMember } = useLocationStore();
-  const { places, setPlaces } = usePlacesStore();
-  const { activeSOSEvents, setActiveSOSEvents } = useSOSStore();
-  const { activeTrips, setActiveTrips } = useTripStore();
-  const { setGlobalSOSEvent } = useRealtimeStore();
-  
-  const [isLoading, setIsLoading] = useState(true);
-  const [showTrackingCard, setShowTrackingCard] = useState(false);
+  const { profile } = useAuthStore();
+  const { currentCircle } = useCircleStore();
+  const [selectedMember, setSelectedMember] = useState<string | null>(null);
 
-  // Realtime subscription
-  const {
-    isConnected: realtimeConnected,
-    connectionError: realtimeError,
-    lastLocationUpdate,
-    lastSOSEvent,
-    lastTripUpdate,
-  } = useRealtimeSubscription(currentCircle?.id || null);
-
-  // Use the location tracking hook
-  const {
-    isTracking,
-    isForeground,
-    isSOSMode,
-    permissionStatus,
-    backgroundPermissionStatus,
-    lastLocation,
-    lastBatteryLevel,
-    error: trackingError,
-    statusText,
-    isBackgroundAvailable,
-    backgroundAvailabilityReason,
-    startTracking,
-    stopTracking,
-    requestPermissions,
-  } = useLocationTracking(user?.id ?? null, currentCircle?.id ?? null, {
-    autoStart: false,
-    enableBackground: true,
-  });
-
-  // Handle realtime location updates
-  useEffect(() => {
-    if (lastLocationUpdate?.data) {
-      const loc = lastLocationUpdate.data as LiveLocation;
-      const isOnline = new Date().getTime() - new Date(loc.timestamp).getTime() < 5 * 60 * 1000;
-      
-      // Update the specific member's location on the map
-      updateMapMember(loc.user_id, {
-        latitude: loc.latitude,
-        longitude: loc.longitude,
-        battery_level: loc.battery_level,
-        is_moving: loc.is_moving,
-        is_online: isOnline,
-        last_seen: loc.timestamp,
-      });
-    }
-  }, [lastLocationUpdate]);
-
-  // Handle realtime SOS events - show global overlay for family SOS
-  useEffect(() => {
-    if (lastSOSEvent?.data) {
-      const sosEvent = lastSOSEvent.data;
-      if (sosEvent.status === 'active' && sosEvent.user_id !== user?.id) {
-        // Find member name
-        const member = members.find(m => m.user_id === sosEvent.user_id);
-        const memberName = (member as any)?.profiles?.name || 'Family Member';
-        setGlobalSOSEvent(sosEvent, memberName);
-        
-        // Update active SOS events
-        setActiveSOSEvents([sosEvent, ...activeSOSEvents.filter(e => e.id !== sosEvent.id)]);
-      } else if (sosEvent.status === 'cancelled' || sosEvent.status === 'resolved') {
-        // Clear if resolved
-        setActiveSOSEvents(activeSOSEvents.filter(e => e.id !== sosEvent.id));
-      }
-    }
-  }, [lastSOSEvent]);
-
-  // Handle realtime trip updates
-  useEffect(() => {
-    if (lastTripUpdate?.data) {
-      const trip = lastTripUpdate.data;
-      if (trip.status === 'active') {
-        setActiveTrips([trip, ...activeTrips.filter(t => t.id !== trip.id)]);
-      } else {
-        setActiveTrips(activeTrips.filter(t => t.id !== trip.id));
-      }
-    }
-  }, [lastTripUpdate]);
-
-  // Initial setup
-  useEffect(() => {
-    setupApp();
-  }, []);
-
-  // Auto-start tracking when circle is loaded
-  useEffect(() => {
-    if (currentCircle && user && !isTracking && permissionStatus !== 'denied') {
-      startTracking();
-    }
-  }, [currentCircle, user]);
-
-  const setupApp = async () => {
-    try {
-      await loadUserCircles();
-      setIsLoading(false);
-    } catch (error) {
-      console.error('Setup error:', error);
-      setIsLoading(false);
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'safe': return '#10B981';
+      case 'moving': return '#F59E0B';
+      case 'alert': return '#EF4444';
+      default: return '#64748B';
     }
   };
 
-  const loadUserCircles = async () => {
-    if (!user) return;
-
-    try {
-      const { data: memberData, error: memberError } = await supabase
-        .from('circle_members')
-        .select(`*, family_circles (*)`)
-        .eq('user_id', user.id);
-
-      if (memberError) {
-        console.error('Error loading circles:', memberError);
-        return;
-      }
-
-      if (memberData && memberData.length > 0) {
-        const userCircles = memberData.map((m: any) => m.family_circles).filter(Boolean);
-        setCircles(userCircles);
-        
-        if (userCircles.length > 0) {
-          setCurrentCircle(userCircles[0]);
-          await loadCircleData(userCircles[0].id);
-        }
-      }
-    } catch (error) {
-      console.error('Load circles error:', error);
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'safe': return 'Safe';
+      case 'moving': return 'Moving';
+      case 'alert': return 'Alert';
+      default: return 'Unknown';
     }
   };
-
-  const loadCircleData = async (circleId: string) => {
-    try {
-      // Load members with profiles using RPC to bypass RLS recursion
-      const { data: membersData, error: membersError } = await supabase
-        .rpc('get_circle_members', { p_circle_id: circleId });
-
-      if (!membersError && membersData) {
-        // Fetch profiles for members
-        const userIds = membersData.map((m: any) => m.user_id);
-        const { data: profilesData } = await supabase
-          .from('profiles')
-          .select('*')
-          .in('user_id', userIds);
-        
-        // Merge profiles with members
-        const membersWithProfiles = membersData.map((m: any) => ({
-          ...m,
-          profiles: profilesData?.find((p: any) => p.user_id === m.user_id)
-        }));
-        setMembers(membersWithProfiles);
-      }
-
-      // Load places
-      const { data: placesData, error: placesError } = await supabase
-        .from('places')
-        .select('*')
-        .eq('circle_id', circleId);
-
-      if (!placesError && placesData) {
-        setPlaces(placesData);
-      }
-
-      // Load live locations
-      const { data: locationsData, error: locationsError } = await supabase
-        .from('live_locations')
-        .select(`*, profiles (*)`)
-        .eq('circle_id', circleId);
-
-      if (!locationsError && locationsData) {
-        const mapMembersData: MapMember[] = locationsData.map((loc: any) => ({
-          id: loc.id,
-          user_id: loc.user_id,
-          name: loc.profiles?.name || 'Unknown',
-          avatar_url: loc.profiles?.avatar_url,
-          role: loc.profiles?.role || 'child',
-          latitude: loc.latitude,
-          longitude: loc.longitude,
-          battery_level: loc.battery_level,
-          is_moving: loc.is_moving || false,
-          is_online: new Date().getTime() - new Date(loc.timestamp).getTime() < 5 * 60 * 1000,
-          last_seen: loc.timestamp,
-        }));
-        setMapMembers(mapMembersData);
-      }
-
-      // Load active SOS events
-      const { data: sosData } = await supabase
-        .from('sos_events')
-        .select('*')
-        .eq('circle_id', circleId)
-        .eq('status', 'active');
-
-      if (sosData) {
-        setActiveSOSEvents(sosData);
-      }
-
-      // Load active trips
-      const { data: tripsData } = await supabase
-        .from('monitored_trips')
-        .select('*')
-        .eq('circle_id', circleId)
-        .eq('status', 'active');
-
-      if (tripsData) {
-        setActiveTrips(tripsData);
-      }
-    } catch (error) {
-      console.error('Load circle data error:', error);
-    }
-  };
-
-  const triggerSOS = () => {
-    router.push('/sos/active');
-  };
-
-  const startTrip = () => {
-    router.push('/trip/active');
-  };
-
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6366F1" />
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
-    );
-  }
 
   return (
     <View style={styles.container}>
       {/* Map Placeholder */}
       <View style={styles.mapContainer}>
         <View style={styles.mapPlaceholder}>
-          <Ionicons name="map" size={64} color="#6366F1" />
-          <Text style={styles.mapTitle}>Guardian AI</Text>
-          <Text style={styles.mapSubtitle}>
-            {Platform.OS === 'web' 
-              ? 'Full map available on mobile app' 
-              : 'Map view'}
-          </Text>
-          {lastLocation && (
-            <View style={styles.locationDisplay}>
-              <Ionicons name="location" size={16} color="#10B981" />
-              <Text style={styles.coordsText}>
-                {lastLocation.latitude.toFixed(4)}, {lastLocation.longitude.toFixed(4)}
-              </Text>
-            </View>
-          )}
-          
-          {/* Realtime Connection Status */}
-          <View style={[
-            styles.realtimeStatus, 
-            { backgroundColor: realtimeConnected ? 'rgba(16, 185, 129, 0.2)' : 'rgba(220, 38, 38, 0.2)' }
-          ]}>
-            <View style={[
-              styles.realtimeDot, 
-              { backgroundColor: realtimeConnected ? '#10B981' : '#DC2626' }
-            ]} />
-            <Text style={[
-              styles.realtimeText, 
-              { color: realtimeConnected ? '#10B981' : '#DC2626' }
-            ]}>
-              {realtimeConnected ? 'Live Updates Active' : realtimeError || 'Connecting...'}
-            </Text>
-          </View>
+          <Ionicons name="map" size={80} color="#6366F1" />
+          <Text style={styles.mapText}>Family Map</Text>
+          <Text style={styles.mapSubtext}>See where everyone is</Text>
         </View>
 
-        {/* Active SOS Alert Banner */}
-        {activeSOSEvents.length > 0 && (
-          <View style={styles.sosBanner}>
-            <Ionicons name="alert" size={20} color="#FFFFFF" />
-            <Text style={styles.sosBannerText}>
-              {activeSOSEvents.length} Active SOS Alert{activeSOSEvents.length > 1 ? 's' : ''}
-            </Text>
+        {/* Safety Status Banner */}
+        <View style={styles.safetyBanner}>
+          <View style={styles.safetyIndicator}>
+            <View style={[styles.safetyDot, { backgroundColor: '#10B981' }]} />
+            <Text style={styles.safetyText}>Everyone is safe</Text>
           </View>
-        )}
-
-        {/* Active Trips Banner */}
-        {activeTrips.length > 0 && (
-          <View style={styles.tripBanner}>
-            <Ionicons name="navigate" size={18} color="#FFFFFF" />
-            <Text style={styles.tripBannerText}>
-              {activeTrips.length} Active Trip{activeTrips.length > 1 ? 's' : ''}
-            </Text>
-          </View>
-        )}
-
-        {/* Family Members Overlay */}
-        {mapMembers.length > 0 && (
-          <View style={styles.membersOverlay}>
-            <Text style={styles.overlayTitle}>Family Members</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {mapMembers.map((member) => (
-                <View key={member.id} style={styles.memberCard} data-testid={`member-card-${member.user_id}`}>
-                  <View style={[styles.memberAvatar, { backgroundColor: getAvatarColor(member.user_id) }]}>
-                    <Text style={styles.memberInitials}>{getInitials(member.name)}</Text>
-                    {member.user_id === user?.id && (
-                      <View style={[
-                        styles.trackingIndicator,
-                        { backgroundColor: isTracking ? '#10B981' : '#64748B' }
-                      ]} />
-                    )}
-                    {/* Online indicator */}
-                    <View style={[
-                      styles.onlineIndicator,
-                      { backgroundColor: member.is_online ? '#10B981' : '#64748B' }
-                    ]} />
-                  </View>
-                  <Text style={styles.memberName}>
-                    {member.name.split(' ')[0]}
-                    {member.user_id === user?.id && ' (You)'}
-                  </Text>
-                  <View style={styles.memberStatus}>
-                    <View style={[styles.statusDot, { backgroundColor: member.is_online ? '#10B981' : '#64748B' }]} />
-                    <Text style={styles.statusText}>{member.is_online ? 'Online' : 'Offline'}</Text>
-                  </View>
-                  {/* Last seen */}
-                  <Text style={styles.lastSeenText}>
-                    {member.is_online ? 'Now' : formatRelativeTime(member.last_seen)}
-                  </Text>
-                  {member.battery_level !== undefined && (
-                    <View style={styles.batteryRow}>
-                      <Ionicons name="battery-half" size={12} color={getBatteryColor(member.battery_level)} />
-                      <Text style={[styles.batteryText, { color: getBatteryColor(member.battery_level) }]}>
-                        {member.battery_level}%
-                      </Text>
-                    </View>
-                  )}
-                  {/* Moving indicator */}
-                  {member.is_moving && (
-                    <View style={styles.movingBadge}>
-                      <Ionicons name="walk" size={10} color="#6366F1" />
-                      <Text style={styles.movingText}>Moving</Text>
-                    </View>
-                  )}
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        )}
+        </View>
       </View>
 
-      {/* Top Header */}
-      <SafeAreaView style={styles.header} edges={['top']}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity style={styles.circleSelector} onPress={() => router.push('/circle/create')}>
-            <Ionicons name="shield-checkmark" size={24} color="#6366F1" />
-            <Text style={styles.circleName}>{currentCircle?.name || 'No Circle'}</Text>
-            <Ionicons name="chevron-down" size={16} color="#94A3B8" />
-          </TouchableOpacity>
-          
-          <View style={styles.headerButtons}>
-            {/* Realtime Status Indicator */}
-            <View style={[
-              styles.realtimeIndicator,
-              { backgroundColor: realtimeConnected ? 'rgba(16, 185, 129, 0.2)' : 'rgba(220, 38, 38, 0.2)' }
-            ]}>
-              <View style={[
-                styles.realtimePulse,
-                { backgroundColor: realtimeConnected ? '#10B981' : '#DC2626' }
-              ]} />
-            </View>
-            
-            {/* Tracking Status Button */}
-            <TouchableOpacity 
+      {/* Family Members Cards */}
+      <View style={styles.membersSection}>
+        <Text style={styles.sectionTitle}>Family</Text>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.membersScroll}
+        >
+          {mockFamilyMembers.map((member) => (
+            <TouchableOpacity
+              key={member.id}
               style={[
-                styles.trackingButton,
-                { backgroundColor: isTracking ? 'rgba(16, 185, 129, 0.2)' : 'rgba(100, 116, 139, 0.2)' }
-              ]} 
-              onPress={() => setShowTrackingCard(!showTrackingCard)}
-              data-testid="tracking-status-btn"
+                styles.memberCard,
+                selectedMember === member.id && styles.memberCardSelected
+              ]}
+              onPress={() => setSelectedMember(member.id)}
+              data-testid={`member-${member.id}`}
             >
-              <View style={[
-                styles.trackingDot,
-                { backgroundColor: isTracking ? '#10B981' : '#64748B' }
-              ]} />
-              <Ionicons 
-                name={isTracking ? 'radio' : 'radio-outline'} 
-                size={18} 
-                color={isTracking ? '#10B981' : '#64748B'} 
-              />
+              <View style={styles.memberHeader}>
+                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(member.status) }]}>
+                  <Text style={styles.statusBadgeText}>{getStatusText(member.status)}</Text>
+                </View>
+              </View>
+              <View style={styles.memberAvatar}>
+                <Text style={styles.memberInitial}>{member.name[0]}</Text>
+              </View>
+              <Text style={styles.memberName}>{member.name}</Text>
+              <Text style={styles.memberLocation}>{member.location}</Text>
+              <View style={styles.memberFooter}>
+                <Ionicons name="battery-half" size={14} color="#64748B" />
+                <Text style={styles.memberBattery}>{member.battery}%</Text>
+              </View>
             </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.settingsButton} onPress={() => router.push('/settings')}>
-              <Ionicons name="settings-outline" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </SafeAreaView>
-
-      {/* Tracking Status Card (Expandable) */}
-      {showTrackingCard && (
-        <View style={styles.trackingCardContainer}>
-          <TrackingStatusCard
-            isTracking={isTracking}
-            isForeground={isForeground}
-            isSOSMode={isSOSMode}
-            permissionStatus={permissionStatus}
-            backgroundPermissionStatus={backgroundPermissionStatus}
-            lastLocation={lastLocation}
-            lastBatteryLevel={lastBatteryLevel}
-            error={trackingError}
-            statusText={statusText}
-            isBackgroundAvailable={isBackgroundAvailable}
-            backgroundAvailabilityReason={backgroundAvailabilityReason}
-            onStartTracking={startTracking}
-            onStopTracking={stopTracking}
-            onRequestPermissions={requestPermissions}
-          />
-        </View>
-      )}
+          ))}
+        </ScrollView>
+      </View>
 
       {/* Quick Actions */}
-      <View style={styles.quickActions}>
+      <View style={styles.actionsSection}>
         {/* SOS Button */}
-        <TouchableOpacity style={styles.sosButton} onPress={triggerSOS} data-testid="sos-btn">
-          <View style={styles.sosButtonInner}>
-            <Ionicons name="alert" size={28} color="#FFFFFF" />
-            <Text style={styles.sosText}>SOS</Text>
-          </View>
+        <TouchableOpacity 
+          style={styles.sosButton}
+          onPress={() => router.push('/sos/active')}
+          data-testid="sos-button"
+        >
+          <Ionicons name="alert-circle" size={32} color="#FFFFFF" />
+          <Text style={styles.sosText}>SOS</Text>
         </TouchableOpacity>
 
-        {/* Trip Button */}
-        <TouchableOpacity style={styles.tripButton} onPress={startTrip} data-testid="start-trip-btn">
-          <Ionicons name="navigate" size={24} color="#FFFFFF" />
-          <Text style={styles.tripText}>I'm Going Home</Text>
+        {/* Going Home Button */}
+        <TouchableOpacity 
+          style={styles.goingHomeButton}
+          onPress={() => router.push('/trip/active')}
+          data-testid="going-home-button"
+        >
+          <Ionicons name="home" size={28} color="#FFFFFF" />
+          <Text style={styles.goingHomeText}>I'm Going Home</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Status Bar */}
-      <View style={styles.statusBar}>
-        <TouchableOpacity 
-          style={styles.statusItem}
-          onPress={() => setShowTrackingCard(!showTrackingCard)}
-        >
-          <Ionicons 
-            name={isTracking ? 'radio' : 'radio-outline'} 
-            size={16} 
-            color={isTracking ? '#10B981' : '#64748B'} 
-          />
-          <Text style={styles.statusBarText}>
-            {isTracking 
-              ? (isForeground ? 'Sharing' : 'Background') 
-              : 'Paused'}
-          </Text>
-        </TouchableOpacity>
-        <View style={styles.statusItem}>
-          <Ionicons name="battery-half" size={16} color={getBatteryColor(lastBatteryLevel)} />
-          <Text style={styles.statusBarText}>{lastBatteryLevel}%</Text>
-        </View>
-        <View style={styles.statusItem}>
-          <Ionicons name="people" size={16} color="#10B981" />
-          <Text style={styles.statusBarText}>{mapMembers.length} members</Text>
-        </View>
-        {places.length > 0 && (
-          <View style={styles.statusItem}>
-            <Ionicons name="location" size={16} color="#6366F1" />
-            <Text style={styles.statusBarText}>{places.length} places</Text>
+      {/* Safe Places Quick View */}
+      <View style={styles.placesSection}>
+        <View style={styles.placeItem}>
+          <View style={[styles.placeIcon, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
+            <Ionicons name="home" size={20} color="#10B981" />
           </View>
-        )}
+          <Text style={styles.placeText}>Home</Text>
+        </View>
+        <View style={styles.placeItem}>
+          <View style={[styles.placeIcon, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }]}>
+            <Ionicons name="school" size={20} color="#6366F1" />
+          </View>
+          <Text style={styles.placeText}>School</Text>
+        </View>
+        <TouchableOpacity style={styles.placeItem}>
+          <View style={[styles.placeIcon, { backgroundColor: 'rgba(100, 116, 139, 0.15)' }]}>
+            <Ionicons name="add" size={20} color="#64748B" />
+          </View>
+          <Text style={styles.placeText}>Add</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -505,19 +154,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0F172A',
   },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: '#0F172A',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    color: '#94A3B8',
-    marginTop: 16,
-    fontSize: 16,
-  },
   mapContainer: {
     flex: 1,
+    minHeight: 280,
   },
   mapPlaceholder: {
     flex: 1,
@@ -525,342 +164,171 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#1E293B',
   },
-  mapTitle: {
+  mapText: {
     fontSize: 24,
     fontWeight: '700',
     color: '#FFFFFF',
     marginTop: 16,
   },
-  mapSubtitle: {
+  mapSubtext: {
     fontSize: 14,
     color: '#94A3B8',
-    marginTop: 8,
+    marginTop: 4,
   },
-  locationDisplay: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 16,
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 8,
-  },
-  coordsText: {
-    fontSize: 14,
-    color: '#10B981',
-    fontWeight: '500',
-  },
-  realtimeStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 16,
-    gap: 6,
-  },
-  realtimeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  realtimeText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  sosBanner: {
+  safetyBanner: {
     position: 'absolute',
-    top: 120,
+    top: 60,
     left: 16,
     right: 16,
+  },
+  safetyIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#DC2626',
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingHorizontal: 16,
     borderRadius: 12,
-    gap: 8,
+    gap: 10,
   },
-  sosBannerText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  tripBanner: {
-    position: 'absolute',
-    top: 170,
-    left: 16,
-    right: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#10B981',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    gap: 8,
-  },
-  tripBannerText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  membersOverlay: {
-    position: 'absolute',
-    bottom: 200,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(15, 23, 42, 0.95)',
-    padding: 16,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-  },
-  overlayTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#94A3B8',
-    marginBottom: 12,
-  },
-  memberCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 12,
-    padding: 12,
-    marginRight: 12,
-    alignItems: 'center',
-    minWidth: 100,
-  },
-  memberAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-    position: 'relative',
-  },
-  trackingIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
+  safetyDot: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#1E293B',
   },
-  onlineIndicator: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: 2,
-    borderColor: '#1E293B',
-  },
-  memberInitials: {
-    color: '#FFFFFF',
+  safetyText: {
+    color: '#10B981',
     fontSize: 16,
     fontWeight: '600',
+  },
+  membersSection: {
+    paddingTop: 20,
+    paddingBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    paddingHorizontal: 20,
+    marginBottom: 12,
+  },
+  membersScroll: {
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  memberCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 16,
+    padding: 16,
+    width: 140,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  memberCardSelected: {
+    borderColor: '#6366F1',
+  },
+  memberHeader: {
+    width: '100%',
+    alignItems: 'flex-end',
+    marginBottom: 8,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  statusBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  memberAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#6366F1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  memberInitial: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '700',
   },
   memberName: {
     color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '500',
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  memberStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusText: {
-    color: '#64748B',
-    fontSize: 10,
-  },
-  lastSeenText: {
-    color: '#64748B',
-    fontSize: 9,
-    marginTop: 2,
-  },
-  batteryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-  },
-  batteryText: {
-    fontSize: 10,
-    fontWeight: '500',
-  },
-  movingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(99, 102, 241, 0.2)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    marginTop: 4,
-    gap: 2,
-  },
-  movingText: {
-    color: '#6366F1',
-    fontSize: 9,
-    fontWeight: '600',
-  },
-  header: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  circleSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(30, 41, 59, 0.95)',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  circleName: {
-    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+    marginBottom: 4,
   },
-  headerButtons: {
+  memberLocation: {
+    color: '#94A3B8',
+    fontSize: 12,
+    marginBottom: 8,
+  },
+  memberFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 4,
   },
-  realtimeIndicator: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
+  memberBattery: {
+    color: '#64748B',
+    fontSize: 12,
   },
-  realtimePulse: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  trackingButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  trackingDot: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  settingsButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(30, 41, 59, 0.95)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  trackingCardContainer: {
-    position: 'absolute',
-    top: 110,
-    left: 16,
-    right: 16,
-    zIndex: 10,
-  },
-  quickActions: {
-    position: 'absolute',
-    bottom: 100,
-    left: 16,
-    right: 16,
+  actionsSection: {
     flexDirection: 'row',
+    paddingHorizontal: 20,
     gap: 12,
+    marginBottom: 16,
   },
   sosButton: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#DC2626',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#EF4444',
     justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#DC2626',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  sosButtonInner: {
     alignItems: 'center',
   },
   sosText: {
     color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     marginTop: 2,
   },
-  tripButton: {
+  goingHomeButton: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    height: 80,
+    borderRadius: 16,
     backgroundColor: '#10B981',
-    borderRadius: 36,
-    paddingHorizontal: 24,
-    gap: 10,
-    shadowColor: '#10B981',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  tripText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  statusBar: {
-    position: 'absolute',
-    bottom: 180,
-    left: 16,
-    right: 16,
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 16,
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 12,
   },
-  statusItem: {
+  goingHomeText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  placesSection: {
     flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 24,
+    paddingBottom: 16,
+  },
+  placeItem: {
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(30, 41, 59, 0.9)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
   },
-  statusBarText: {
+  placeIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  placeText: {
     color: '#94A3B8',
     fontSize: 12,
     fontWeight: '500',

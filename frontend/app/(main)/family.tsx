@@ -1,525 +1,199 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  RefreshControl,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore, useCircleStore, usePlacesStore, useLocationStore, useSOSStore, useTripStore, useRealtimeStore } from '../../lib/store';
 import { supabase } from '../../lib/supabase';
-import { CircleMember, FamilyCircle, Place, LiveLocation, SOSEvent, MonitoredTrip } from '../../types';
-import { getInitials, getAvatarColor, formatRelativeTime, getPlaceIcon, getPlaceColor, getBatteryColor } from '../../utils/helpers';
-import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription';
+import { useAuthStore, useCircleStore } from '../../lib/store';
 
-interface MemberWithStatus extends CircleMember {
-  profiles?: {
-    name: string;
-    avatar_url?: string;
-    role: string;
-  };
-  liveLocation?: LiveLocation;
-  activeSOSEvent?: SOSEvent;
-  activeTrip?: MonitoredTrip;
-}
+// Mock family data
+const mockFamily = {
+  name: 'Smith Family',
+  inviteCode: 'FAM123',
+  members: [
+    { id: '1', name: 'Sarah', role: 'parent', status: 'online', isAdmin: true },
+    { id: '2', name: 'Mike', role: 'parent', status: 'online', isAdmin: true },
+    { id: '3', name: 'Emma', role: 'child', status: 'online', age: 12 },
+    { id: '4', name: 'Jake', role: 'child', status: 'online', age: 8 },
+  ],
+  places: [
+    { id: '1', name: 'Home', type: 'home', address: '123 Main St' },
+    { id: '2', name: 'School', type: 'school', address: 'Oak Elementary' },
+  ],
+};
 
 export default function FamilyScreen() {
   const router = useRouter();
-  const { user, profile } = useAuthStore();
-  const { circles, currentCircle, members, setCircles, setCurrentCircle, setMembers } = useCircleStore();
-  const { places, setPlaces } = usePlacesStore();
-  const { mapMembers, updateMapMember } = useLocationStore();
-  const { activeSOSEvents, setActiveSOSEvents } = useSOSStore();
-  const { activeTrips, setActiveTrips } = useTripStore();
-  const { setGlobalSOSEvent } = useRealtimeStore();
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [membersWithStatus, setMembersWithStatus] = useState<MemberWithStatus[]>([]);
+  const { profile, setUser, setProfile } = useAuthStore();
+  const [showInviteCode, setShowInviteCode] = useState(false);
 
-  // Realtime subscription
-  const {
-    isConnected,
-    connectionError,
-    lastLocationUpdate,
-    lastSOSEvent,
-    lastTripUpdate,
-    lastGeofenceEvent,
-  } = useRealtimeSubscription(currentCircle?.id || null);
-
-  // Handle realtime location updates - update member status
-  useEffect(() => {
-    if (lastLocationUpdate?.data) {
-      const loc = lastLocationUpdate.data as LiveLocation;
-      const isOnline = new Date().getTime() - new Date(loc.timestamp).getTime() < 5 * 60 * 1000;
-      
-      // Update member with status
-      setMembersWithStatus(prev => prev.map(member => {
-        if (member.user_id === loc.user_id) {
-          return {
-            ...member,
-            liveLocation: loc,
-          };
-        }
-        return member;
-      }));
-
-      // Also update map members
-      updateMapMember(loc.user_id, {
-        latitude: loc.latitude,
-        longitude: loc.longitude,
-        battery_level: loc.battery_level,
-        is_moving: loc.is_moving,
-        is_online: isOnline,
-        last_seen: loc.timestamp,
-      });
-    }
-  }, [lastLocationUpdate]);
-
-  // Handle realtime SOS events
-  useEffect(() => {
-    if (lastSOSEvent?.data) {
-      const sosEvent = lastSOSEvent.data as SOSEvent;
-      
-      if (sosEvent.status === 'active') {
-        // Update member with active SOS
-        setMembersWithStatus(prev => prev.map(member => {
-          if (member.user_id === sosEvent.user_id) {
-            return { ...member, activeSOSEvent: sosEvent };
+  const handleLogout = async () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            await supabase.auth.signOut();
+            setUser(null);
+            setProfile(null);
+            router.replace('/(auth)/login');
           }
-          return member;
-        }));
-        
-        // Show global SOS if not current user
-        if (sosEvent.user_id !== user?.id) {
-          const member = members.find(m => m.user_id === sosEvent.user_id);
-          const memberName = (member as any)?.profiles?.name || 'Family Member';
-          setGlobalSOSEvent(sosEvent, memberName);
         }
-
-        setActiveSOSEvents([sosEvent, ...activeSOSEvents.filter(e => e.id !== sosEvent.id)]);
-      } else {
-        // Clear SOS from member
-        setMembersWithStatus(prev => prev.map(member => {
-          if (member.user_id === sosEvent.user_id) {
-            return { ...member, activeSOSEvent: undefined };
-          }
-          return member;
-        }));
-        setActiveSOSEvents(activeSOSEvents.filter(e => e.id !== sosEvent.id));
-      }
-    }
-  }, [lastSOSEvent]);
-
-  // Handle realtime trip updates
-  useEffect(() => {
-    if (lastTripUpdate?.data) {
-      const trip = lastTripUpdate.data as MonitoredTrip;
-      
-      if (trip.status === 'active') {
-        setMembersWithStatus(prev => prev.map(member => {
-          if (member.user_id === trip.user_id) {
-            return { ...member, activeTrip: trip };
-          }
-          return member;
-        }));
-        setActiveTrips([trip, ...activeTrips.filter(t => t.id !== trip.id)]);
-      } else {
-        setMembersWithStatus(prev => prev.map(member => {
-          if (member.user_id === trip.user_id) {
-            return { ...member, activeTrip: undefined };
-          }
-          return member;
-        }));
-        setActiveTrips(activeTrips.filter(t => t.id !== trip.id));
-      }
-    }
-  }, [lastTripUpdate]);
-
-  useEffect(() => {
-    loadData();
-  }, [currentCircle]);
-
-  const loadData = async () => {
-    if (!user) return;
-
-    try {
-      // Load circles
-      const { data: memberData } = await supabase
-        .from('circle_members')
-        .select(`*, family_circles (*)`)
-        .eq('user_id', user.id);
-
-      if (memberData) {
-        const userCircles = memberData.map((m: any) => m.family_circles).filter(Boolean);
-        setCircles(userCircles);
-        
-        if (!currentCircle && userCircles.length > 0) {
-          setCurrentCircle(userCircles[0]);
-        }
-      }
-
-      // Load members of current circle with live locations
-      if (currentCircle) {
-        const { data: membersData } = await supabase
-          .rpc('get_circle_members', { p_circle_id: currentCircle.id });
-
-        if (membersData) {
-          // Fetch profiles for members
-          const userIds = membersData.map((m: any) => m.user_id);
-          const { data: profilesData } = await supabase
-            .from('profiles')
-            .select('*')
-            .in('user_id', userIds);
-          
-          const membersWithProfiles = membersData.map((m: any) => ({
-            ...m,
-            profiles: profilesData?.find((p: any) => p.user_id === m.user_id)
-          }));
-          setMembers(membersWithProfiles);
-          
-          // Load live locations for members
-          const { data: locationsData } = await supabase
-            .from('live_locations')
-            .select('*')
-            .eq('circle_id', currentCircle.id);
-
-          // Load active SOS events
-          const { data: sosData } = await supabase
-            .from('sos_events')
-            .select('*')
-            .eq('circle_id', currentCircle.id)
-            .eq('status', 'active');
-
-          // Load active trips
-          const { data: tripsData } = await supabase
-            .from('monitored_trips')
-            .select('*')
-            .eq('circle_id', currentCircle.id)
-            .eq('status', 'active');
-
-          if (sosData) setActiveSOSEvents(sosData);
-          if (tripsData) setActiveTrips(tripsData);
-
-          // Combine member data with live locations and status
-          const enrichedMembers = membersData.map((member: any) => {
-            const location = locationsData?.find((l: LiveLocation) => l.user_id === member.user_id);
-            const sosEvent = sosData?.find((s: SOSEvent) => s.user_id === member.user_id && s.status === 'active');
-            const trip = tripsData?.find((t: MonitoredTrip) => t.user_id === member.user_id && t.status === 'active');
-            
-            return {
-              ...member,
-              liveLocation: location,
-              activeSOSEvent: sosEvent,
-              activeTrip: trip,
-            } as MemberWithStatus;
-          });
-          
-          setMembersWithStatus(enrichedMembers);
-        }
-
-        // Load places
-        const { data: placesData } = await supabase
-          .from('places')
-          .select('*')
-          .eq('circle_id', currentCircle.id);
-
-        if (placesData) {
-          setPlaces(placesData);
-        }
-      }
-    } catch (error) {
-      console.error('Load data error:', error);
-    }
-  };
-
-  const onRefresh = async () => {
-    setIsRefreshing(true);
-    await loadData();
-    setIsRefreshing(false);
+      ]
+    );
   };
 
   const copyInviteCode = () => {
-    if (currentCircle?.invite_code) {
-      Alert.alert('Invite Code', `Share this code with family members:\n\n${currentCircle.invite_code}`, [
-        { text: 'OK' }
-      ]);
-    }
-  };
-
-  const getMemberOnlineStatus = (member: MemberWithStatus): { isOnline: boolean; lastSeen: string } => {
-    if (member.liveLocation) {
-      const lastSeenTime = new Date(member.liveLocation.timestamp).getTime();
-      const now = new Date().getTime();
-      const isOnline = now - lastSeenTime < 5 * 60 * 1000; // 5 minutes
-      return { isOnline, lastSeen: member.liveLocation.timestamp };
-    }
-    return { isOnline: false, lastSeen: member.joined_at };
+    Alert.alert('Invite Code', mockFamily.inviteCode, [
+      { text: 'OK' }
+    ]);
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']} data-testid="family-screen">
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.title}>Family</Text>
-          {/* Realtime status */}
-          <View style={[
-            styles.realtimeIndicator,
-            { backgroundColor: isConnected ? 'rgba(16, 185, 129, 0.2)' : 'rgba(100, 116, 139, 0.2)' }
-          ]}>
-            <View style={[
-              styles.realtimeDot,
-              { backgroundColor: isConnected ? '#10B981' : '#64748B' }
-            ]} />
-          </View>
-        </View>
-        <TouchableOpacity style={styles.addButton} onPress={() => router.push('/circle/create')}>
-          <Ionicons name="add" size={24} color="#FFFFFF" />
+        <Text style={styles.title}>Family</Text>
+        <TouchableOpacity style={styles.settingsButton} onPress={() => router.push('/settings')}>
+          <Ionicons name="settings-outline" size={24} color="#94A3B8" />
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        style={styles.content}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={onRefresh}
-            tintColor="#6366F1"
-          />
-        }
-      >
-        {/* Circle Selector */}
-        {circles.length > 0 ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Your Circles</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.circlesRow}>
-              {circles.map((circle) => (
-                <TouchableOpacity
-                  key={circle.id}
-                  style={[
-                    styles.circleCard,
-                    currentCircle?.id === circle.id && styles.circleCardActive,
-                  ]}
-                  onPress={() => setCurrentCircle(circle)}
-                  data-testid={`circle-${circle.id}`}
-                >
-                  <View style={styles.circleIcon}>
-                    <Ionicons name="shield" size={24} color="#6366F1" />
-                  </View>
-                  <Text style={styles.circleCardName}>{circle.name}</Text>
-                </TouchableOpacity>
-              ))}
-              <TouchableOpacity
-                style={styles.addCircleCard}
-                onPress={() => router.push('/circle/join')}
-                data-testid="join-circle-btn"
-              >
-                <Ionicons name="add-circle-outline" size={32} color="#64748B" />
-                <Text style={styles.addCircleText}>Join Circle</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        ) : (
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIcon}>
-              <Ionicons name="people-outline" size={48} color="#64748B" />
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Family Card */}
+        <View style={styles.familyCard}>
+          <View style={styles.familyHeader}>
+            <View style={styles.familyIcon}>
+              <Ionicons name="shield-checkmark" size={32} color="#6366F1" />
             </View>
-            <Text style={styles.emptyTitle}>No Family Circle</Text>
-            <Text style={styles.emptySubtitle}>Create or join a circle to get started</Text>
-            <View style={styles.emptyActions}>
-              <TouchableOpacity
-                style={styles.createButton}
-                onPress={() => router.push('/circle/create')}
-                data-testid="create-circle-btn"
-              >
-                <Ionicons name="add" size={20} color="#FFFFFF" />
-                <Text style={styles.createButtonText}>Create Circle</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.joinButton}
-                onPress={() => router.push('/circle/join')}
-              >
-                <Ionicons name="enter-outline" size={20} color="#6366F1" />
-                <Text style={styles.joinButtonText}>Join Circle</Text>
-              </TouchableOpacity>
+            <View style={styles.familyInfo}>
+              <Text style={styles.familyName}>{mockFamily.name}</Text>
+              <Text style={styles.familyCount}>{mockFamily.members.length} members</Text>
             </View>
           </View>
-        )}
+          
+          {/* Invite Button */}
+          <TouchableOpacity style={styles.inviteButton} onPress={copyInviteCode}>
+            <Ionicons name="person-add" size={20} color="#6366F1" />
+            <Text style={styles.inviteText}>Invite Family Member</Text>
+          </TouchableOpacity>
+        </View>
 
-        {/* Current Circle Details */}
-        {currentCircle && (
-          <>
-            {/* Invite Code */}
-            <View style={styles.section}>
-              <TouchableOpacity style={styles.inviteCard} onPress={copyInviteCode} data-testid="invite-code-card">
-                <View style={styles.inviteContent}>
-                  <Ionicons name="qr-code" size={24} color="#6366F1" />
-                  <View style={styles.inviteText}>
-                    <Text style={styles.inviteLabel}>Invite Code</Text>
-                    <Text style={styles.inviteCode}>{currentCircle.invite_code}</Text>
-                  </View>
+        {/* Members Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Members</Text>
+          {mockFamily.members.map((member) => (
+            <TouchableOpacity key={member.id} style={styles.memberCard}>
+              <View style={styles.memberAvatar}>
+                <Text style={styles.memberInitial}>{member.name[0]}</Text>
+                <View style={[
+                  styles.statusDot,
+                  { backgroundColor: member.status === 'online' ? '#10B981' : '#64748B' }
+                ]} />
+              </View>
+              <View style={styles.memberInfo}>
+                <View style={styles.memberNameRow}>
+                  <Text style={styles.memberName}>{member.name}</Text>
+                  {member.isAdmin && (
+                    <View style={styles.adminBadge}>
+                      <Text style={styles.adminText}>Admin</Text>
+                    </View>
+                  )}
                 </View>
-                <Ionicons name="copy-outline" size={20} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Members */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Members ({membersWithStatus.length})</Text>
-                <Text style={styles.onlineCount}>
-                  {membersWithStatus.filter(m => getMemberOnlineStatus(m).isOnline).length} online
+                <Text style={styles.memberRole}>
+                  {member.role === 'parent' ? 'Parent' : `Child${member.age ? ` • ${member.age} years` : ''}`}
                 </Text>
               </View>
-              <View style={styles.membersList}>
-                {membersWithStatus.map((member) => {
-                  const { isOnline, lastSeen } = getMemberOnlineStatus(member);
-                  const isCurrentUser = member.user_id === user?.id;
-                  
-                  return (
-                    <View key={member.id} style={styles.memberCard} data-testid={`member-${member.user_id}`}>
-                      {/* Avatar with status indicators */}
-                      <View style={styles.memberAvatarContainer}>
-                        <View style={[
-                          styles.memberAvatar,
-                          { backgroundColor: getAvatarColor(member.user_id) },
-                        ]}>
-                          <Text style={styles.memberInitials}>
-                            {getInitials((member as any).profiles?.name || 'U')}
-                          </Text>
-                        </View>
-                        {/* Online indicator */}
-                        <View style={[
-                          styles.onlineIndicator,
-                          { backgroundColor: isOnline ? '#10B981' : '#64748B' }
-                        ]} />
-                        {/* SOS indicator */}
-                        {member.activeSOSEvent && (
-                          <View style={styles.sosIndicator}>
-                            <Ionicons name="alert" size={10} color="#FFFFFF" />
-                          </View>
-                        )}
-                      </View>
+              <Ionicons name="chevron-forward" size={20} color="#64748B" />
+            </TouchableOpacity>
+          ))}
+        </View>
 
-                      <View style={styles.memberInfo}>
-                        <View style={styles.memberNameRow}>
-                          <Text style={styles.memberName}>
-                            {(member as any).profiles?.name || 'Unknown'}
-                            {isCurrentUser && ' (You)'}
-                          </Text>
-                          {/* Active trip indicator */}
-                          {member.activeTrip && (
-                            <View style={styles.tripIndicator}>
-                              <Ionicons name="navigate" size={10} color="#10B981" />
-                              <Text style={styles.tripIndicatorText}>Trip</Text>
-                            </View>
-                          )}
-                        </View>
-                        <Text style={styles.memberRole}>{member.role}</Text>
-                        
-                        {/* Location and status info */}
-                        <View style={styles.memberStatusRow}>
-                          <View style={[styles.statusBadge, { backgroundColor: isOnline ? 'rgba(16, 185, 129, 0.1)' : 'rgba(100, 116, 139, 0.1)' }]}>
-                            <View style={[styles.statusDotSmall, { backgroundColor: isOnline ? '#10B981' : '#64748B' }]} />
-                            <Text style={[styles.statusBadgeText, { color: isOnline ? '#10B981' : '#64748B' }]}>
-                              {isOnline ? 'Online' : 'Offline'}
-                            </Text>
-                          </View>
-                          <Text style={styles.lastSeenText}>
-                            {isOnline ? 'Now' : formatRelativeTime(lastSeen)}
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Right side - battery and movement */}
-                      <View style={styles.memberRightInfo}>
-                        {member.liveLocation?.battery_level !== undefined && (
-                          <View style={styles.batteryInfo}>
-                            <Ionicons 
-                              name="battery-half" 
-                              size={14} 
-                              color={getBatteryColor(member.liveLocation.battery_level)} 
-                            />
-                            <Text style={[
-                              styles.batteryText, 
-                              { color: getBatteryColor(member.liveLocation.battery_level) }
-                            ]}>
-                              {member.liveLocation.battery_level}%
-                            </Text>
-                          </View>
-                        )}
-                        {member.liveLocation?.is_moving && (
-                          <View style={styles.movingBadge}>
-                            <Ionicons name="walk" size={12} color="#6366F1" />
-                          </View>
-                        )}
-                        {/* SOS Alert Badge */}
-                        {member.activeSOSEvent && (
-                          <View style={styles.sosAlertBadge}>
-                            <Ionicons name="alert" size={12} color="#FFFFFF" />
-                            <Text style={styles.sosAlertText}>SOS</Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                  );
-                })}
+        {/* Safe Places Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Safe Places</Text>
+            <TouchableOpacity style={styles.addButton} onPress={() => router.push('/place/create')}>
+              <Ionicons name="add-circle" size={24} color="#6366F1" />
+            </TouchableOpacity>
+          </View>
+          {mockFamily.places.map((place) => (
+            <TouchableOpacity key={place.id} style={styles.placeCard}>
+              <View style={[
+                styles.placeIcon,
+                { backgroundColor: place.type === 'home' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(99, 102, 241, 0.15)' }
+              ]}>
+                <Ionicons 
+                  name={place.type === 'home' ? 'home' : 'school'} 
+                  size={22} 
+                  color={place.type === 'home' ? '#10B981' : '#6366F1'} 
+                />
               </View>
-            </View>
-
-            {/* Places */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Places ({places.length})</Text>
-                <TouchableOpacity onPress={() => router.push('/place/create')}>
-                  <Ionicons name="add-circle" size={24} color="#6366F1" />
-                </TouchableOpacity>
+              <View style={styles.placeInfo}>
+                <Text style={styles.placeName}>{place.name}</Text>
+                <Text style={styles.placeAddress}>{place.address}</Text>
               </View>
-              {places.length > 0 ? (
-                <View style={styles.placesList}>
-                  {places.map((place) => (
-                    <TouchableOpacity
-                      key={place.id}
-                      style={styles.placeCard}
-                      onPress={() => router.push(`/place/${place.id}`)}
-                      data-testid={`place-${place.id}`}
-                    >
-                      <View style={[
-                        styles.placeIcon,
-                        { backgroundColor: `${getPlaceColor(place.type)}20` },
-                      ]}>
-                        <Ionicons
-                          name={getPlaceIcon(place.type) as any}
-                          size={20}
-                          color={getPlaceColor(place.type)}
-                        />
-                      </View>
-                      <View style={styles.placeInfo}>
-                        <Text style={styles.placeName}>{place.name}</Text>
-                        <Text style={styles.placeAddress}>{place.address || 'No address'}</Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={20} color="#64748B" />
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              ) : (
-                <TouchableOpacity
-                  style={styles.addPlaceCard}
-                  onPress={() => router.push('/place/create')}
-                  data-testid="add-place-btn"
-                >
-                  <Ionicons name="location-outline" size={24} color="#64748B" />
-                  <Text style={styles.addPlaceText}>Add your first place</Text>
-                </TouchableOpacity>
-              )}
+              <Ionicons name="chevron-forward" size={20} color="#64748B" />
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Quick Settings */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Settings</Text>
+          
+          <TouchableOpacity style={styles.settingCard}>
+            <View style={[styles.settingIcon, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }]}>
+              <Ionicons name="notifications" size={22} color="#6366F1" />
             </View>
-          </>
-        )}
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingName}>Notifications</Text>
+              <Text style={styles.settingDescription}>Manage alert preferences</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#64748B" />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.settingCard}>
+            <View style={[styles.settingIcon, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
+              <Ionicons name="shield" size={22} color="#10B981" />
+            </View>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingName}>Privacy</Text>
+              <Text style={styles.settingDescription}>Location sharing settings</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#64748B" />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.settingCard}>
+            <View style={[styles.settingIcon, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
+              <Ionicons name="help-circle" size={22} color="#F59E0B" />
+            </View>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingName}>Help & Support</Text>
+              <Text style={styles.settingDescription}>FAQs and contact</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#64748B" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Logout Button */}
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Ionicons name="log-out" size={22} color="#EF4444" />
+          <Text style={styles.logoutText}>Sign Out</Text>
+        </TouchableOpacity>
+
+        <View style={{ height: 32 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -535,31 +209,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+    paddingTop: 8,
+    paddingBottom: 16,
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
     color: '#FFFFFF',
   },
-  realtimeIndicator: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  realtimeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  addButton: {
+  settingsButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -567,8 +225,52 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  content: {
-    flex: 1,
+  familyCard: {
+    backgroundColor: '#1E293B',
+    marginHorizontal: 20,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 24,
+  },
+  familyHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  familyIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  familyInfo: {
+    marginLeft: 16,
+  },
+  familyName: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  familyCount: {
+    fontSize: 14,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  inviteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    borderRadius: 12,
+    paddingVertical: 14,
+    gap: 10,
+  },
+  inviteText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#6366F1',
   },
   section: {
     paddingHorizontal: 20,
@@ -581,153 +283,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#94A3B8',
-    marginBottom: 12,
-  },
-  onlineCount: {
-    fontSize: 12,
-    color: '#10B981',
-    fontWeight: '600',
-  },
-  circlesRow: {
-    flexDirection: 'row',
-    marginHorizontal: -20,
-    paddingHorizontal: 20,
-  },
-  circleCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 16,
-    padding: 16,
-    marginRight: 12,
-    alignItems: 'center',
-    minWidth: 100,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  circleCardActive: {
-    borderColor: '#6366F1',
-    backgroundColor: 'rgba(99, 102, 241, 0.1)',
-  },
-  circleIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(99, 102, 241, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  circleCardName: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  addCircleCard: {
-    backgroundColor: 'transparent',
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 100,
-    borderWidth: 2,
-    borderColor: '#334155',
-    borderStyle: 'dashed',
-  },
-  addCircleText: {
-    color: '#64748B',
-    fontSize: 12,
-    marginTop: 4,
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 40,
-    paddingTop: 60,
-  },
-  emptyIcon: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: '#1E293B',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: '#64748B',
-    textAlign: 'center',
-    marginBottom: 32,
-  },
-  emptyActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  createButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#6366F1',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
-    gap: 8,
-  },
-  createButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  joinButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1E293B',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
-    gap: 8,
-  },
-  joinButtonText: {
-    color: '#6366F1',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  inviteCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#1E293B',
-    borderRadius: 12,
-    padding: 16,
-  },
-  inviteContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  inviteText: {
-    gap: 2,
-  },
-  inviteLabel: {
-    fontSize: 12,
-    color: '#64748B',
-  },
-  inviteCode: {
     fontSize: 18,
     fontWeight: '700',
     color: '#FFFFFF',
-    letterSpacing: 2,
+    marginBottom: 12,
   },
-  membersList: {
-    gap: 8,
+  addButton: {
+    marginBottom: 12,
   },
   memberCard: {
     flexDirection: 'row',
@@ -735,42 +297,29 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E293B',
     borderRadius: 12,
     padding: 12,
-  },
-  memberAvatarContainer: {
-    position: 'relative',
+    marginBottom: 8,
   },
   memberAvatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
+    backgroundColor: '#6366F1',
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
   },
-  memberInitials: {
+  memberInitial: {
     color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
   },
-  onlineIndicator: {
+  statusDot: {
     position: 'absolute',
-    top: 0,
+    bottom: 0,
     right: 0,
     width: 14,
     height: 14,
     borderRadius: 7,
-    borderWidth: 2,
-    borderColor: '#1E293B',
-  },
-  sosIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#DC2626',
-    justifyContent: 'center',
-    alignItems: 'center',
     borderWidth: 2,
     borderColor: '#1E293B',
   },
@@ -788,90 +337,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
   },
-  tripIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    paddingHorizontal: 6,
+  adminBadge: {
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
-    gap: 4,
   },
-  tripIndicatorText: {
-    fontSize: 10,
-    color: '#10B981',
-    fontWeight: '600',
-  },
-  memberRole: {
-    fontSize: 12,
-    color: '#64748B',
-    textTransform: 'capitalize',
-    marginTop: 2,
-  },
-  memberStatusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
-    gap: 8,
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    gap: 4,
-  },
-  statusDotSmall: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  lastSeenText: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  memberRightInfo: {
-    alignItems: 'flex-end',
-    gap: 6,
-  },
-  batteryInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  batteryText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  movingBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(99, 102, 241, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sosAlertBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#DC2626',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    gap: 4,
-  },
-  sosAlertText: {
-    color: '#FFFFFF',
+  adminText: {
     fontSize: 10,
     fontWeight: '700',
+    color: '#6366F1',
   },
-  placesList: {
-    gap: 8,
+  memberRole: {
+    fontSize: 13,
+    color: '#94A3B8',
+    marginTop: 2,
   },
   placeCard: {
     flexDirection: 'row',
@@ -879,10 +359,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E293B',
     borderRadius: 12,
     padding: 12,
+    marginBottom: 8,
   },
   placeIcon: {
-    width: 44,
-    height: 44,
+    width: 48,
+    height: 48,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
@@ -897,23 +378,52 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   placeAddress: {
+    fontSize: 13,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  settingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E293B',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+  },
+  settingIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  settingInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  settingName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  settingDescription: {
     fontSize: 12,
     color: '#64748B',
+    marginTop: 2,
   },
-  addPlaceCard: {
+  logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    marginHorizontal: 20,
     borderRadius: 12,
-    padding: 20,
-    borderWidth: 2,
-    borderColor: '#334155',
-    borderStyle: 'dashed',
-    gap: 8,
+    paddingVertical: 16,
+    gap: 10,
   },
-  addPlaceText: {
-    fontSize: 14,
-    color: '#64748B',
+  logoutText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#EF4444',
   },
 });
