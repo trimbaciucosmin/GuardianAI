@@ -56,9 +56,22 @@ export default function SignupScreen() {
   };
 
   const handleSignup = async () => {
-    if (!validateForm()) return;
+    // Debug alert - remove after testing
+    console.log('=== SIGNUP BUTTON PRESSED ===');
+    
+    console.log('=== SIGNUP STARTED ===');
+    console.log('Email:', email);
+    console.log('Password length:', password.length);
+    
+    if (!validateForm()) {
+      console.log('Form validation failed:', errors);
+      return;
+    }
+
+    console.log('Form validated OK');
 
     if (!isSupabaseConfigured()) {
+      console.log('Supabase not configured');
       Alert.alert(
         'Configuration Required',
         'Please configure Supabase credentials in your .env file:\n\nEXPO_PUBLIC_SUPABASE_URL=your-url\nEXPO_PUBLIC_SUPABASE_ANON_KEY=your-key',
@@ -67,15 +80,20 @@ export default function SignupScreen() {
       return;
     }
 
+    console.log('Supabase configured OK, starting signup...');
     setIsLoading(true);
 
     try {
+      console.log('Calling supabase.auth.signUp...');
       const { data, error } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
       });
 
+      console.log('Signup response:', { data, error });
+
       if (error) {
+        console.log('Signup error:', error);
         Alert.alert('Signup Failed', error.message);
         return;
       }
