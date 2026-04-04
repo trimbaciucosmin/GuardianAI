@@ -2,12 +2,16 @@
   "expo": {
     "name": "Guardian AI",
     "slug": "guardian-ai",
-    "version": "1.0.0",
+    "version": "1.2.0",
+    "runtimeVersion": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "guardian-ai",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
+    "updates": {
+      "url": "https://u.expo.dev/356b7ae5-0f30-41f1-808f-cf5dfb51c0cc"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.guardianai.app",
