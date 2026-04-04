@@ -2,27 +2,15 @@
   "expo": {
     "name": "Guardian AI",
     "slug": "guardian-ai",
-    "version": "1.2.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "guardian-ai",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/356b7ae5-0f30-41f1-808f-cf5dfb51c0cc",
-      "enabled": true,
-      "fallbackToCacheTimeout": 3000,
-      "checkAutomatically": "ON_LOAD"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.guardianai.app",
-      "config": {
-        "googleMapsApiKey": "AIzaSyAHT4mZQH_VJwwdJCt9Y5bitd1jrriVZLI"
-      },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Track family location for safety",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Background tracking for family safety",
@@ -40,11 +28,6 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.guardianai.app",
-      "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyAHT4mZQH_VJwwdJCt9Y5bitd1jrriVZLI"
-        }
-      },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
@@ -88,15 +71,7 @@
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
         }
-      ],
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/images/notification-icon.png",
-          "color": "#6366F1"
-        }
-      ],
-      "expo-updates"
+      ]
     ],
     "experiments": {
       "typedRoutes": true
