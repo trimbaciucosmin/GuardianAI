@@ -219,23 +219,15 @@ export default function FamilyScreen() {
   };
 
   const handleLogout = async () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            await supabase.auth.signOut();
-            setUser(null);
-            setProfile(null);
-            router.replace('/(auth)/login');
-          }
-        }
-      ]
-    );
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm('Ești sigur că vrei să te deconectezi?');
+      if (confirmed) {
+        await supabase.auth.signOut();
+        setUser(null);
+        setProfile(null);
+        router.replace('/(auth)/login');
+      }
+    }
   };
 
   const copyInviteCode = async () => {
@@ -260,32 +252,27 @@ This app lets us share locations and stay safe!`;
         await Clipboard.setStringAsync(inviteMessage);
         
         // Show options to share or just confirm copy
-        Alert.alert(
-          'Copied!',
-          `Invitation with code ${currentCircle.invite_code} copied!\n\nTap "Share Now" to send via WhatsApp, SMS, etc.`,
-          [
-            { text: 'OK', style: 'cancel' },
-            { 
-              text: 'Share Now', 
-              onPress: async () => {
-                try {
-                  await Share.share({
-                    message: inviteMessage,
-                  });
-                } catch (e) {
-                  console.error('Share error:', e);
-                }
-              }
-            },
-          ]
-        );
+        if (typeof window !== 'undefined') {
+          const wantsToShare = window.confirm(
+            `Copiat!\n\nCodul ${currentCircle.invite_code} a fost copiat!\n\nApasă OK pentru a partaja prin WhatsApp, SMS, etc.`
+          );
+          if (wantsToShare) {
+            try {
+              await Share.share({
+                message: inviteMessage,
+              });
+            } catch (e) {
+              console.error('Share error:', e);
+            }
+          }
+        }
       } catch (error) {
         // Fallback if clipboard fails
-        Alert.alert(
-          'Invite Code',
-          `Code: ${currentCircle.invite_code}\n\nApp: ${appUrl}\n\nShare this with family members.`,
-          [{ text: 'OK' }]
-        );
+        if (typeof window !== 'undefined') {
+          window.alert(
+            `Cod de invitație: ${currentCircle.invite_code}\n\nApp: ${appUrl}\n\nTrimite acest cod membrilor familiei.`
+          );
+        }
       }
     }
   };
@@ -326,10 +313,13 @@ This app lets us share locations and stay safe!`;
             <Text style={styles.secondaryButtonText}>Join Circle</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.logoutButtonSmall} onPress={handleLogout}>
-            <Ionicons name="log-out" size={18} color="#EF4444" />
-            <Text style={styles.logoutTextSmall}>Sign Out</Text>
-          </TouchableOpacity>
+          {/* Hide Sign Out for children */}
+          {profile?.role === 'parent' && (
+            <TouchableOpacity style={styles.logoutButtonSmall} onPress={handleLogout}>
+              <Ionicons name="log-out" size={18} color="#EF4444" />
+              <Text style={styles.logoutTextSmall}>Sign Out</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
@@ -532,11 +522,13 @@ This app lets us share locations and stay safe!`;
           </TouchableOpacity>
         </View>
 
-        {/* Logout Button */}
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out" size={22} color="#EF4444" />
-          <Text style={styles.logoutText}>Sign Out</Text>
-        </TouchableOpacity>
+        {/* Logout Button - Only shown for parents */}
+        {profile?.role === 'parent' && (
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <Ionicons name="log-out" size={22} color="#EF4444" />
+            <Text style={styles.logoutText}>Sign Out</Text>
+          </TouchableOpacity>
+        )}
 
         <View style={{ height: 32 }} />
       </ScrollView>

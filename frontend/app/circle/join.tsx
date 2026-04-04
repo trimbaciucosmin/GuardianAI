@@ -24,23 +24,15 @@ export default function JoinCircleScreen() {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSignOut = async () => {
-    Alert.alert(
-      'Sign Out',
-      'Ești sigur că vrei să te deconectezi?',
-      [
-        { text: 'Anulează', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            await supabase.auth.signOut();
-            setUser(null);
-            setProfile(null);
-            router.replace('/(auth)/login');
-          }
-        }
-      ]
-    );
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm('Ești sigur că vrei să te deconectezi?');
+      if (confirmed) {
+        await supabase.auth.signOut();
+        setUser(null);
+        setProfile(null);
+        router.replace('/(auth)/login');
+      }
+    }
   };
 
   const handleJoin = async () => {
@@ -48,47 +40,57 @@ export default function JoinCircleScreen() {
     console.log('Code value:', code);
     console.log('User:', user?.id);
     
-    if (typeof window !== 'undefined') {
-      window.alert('Se procesează codul: ' + code);
-    }
-    
     const cleanCode = code.trim().toUpperCase();
-    console.log('Join code entered:', cleanCode, 'Length:', cleanCode.length);
     
     if (!cleanCode || cleanCode.length < 4) {
       if (typeof window !== 'undefined') {
-        window.alert('Te rugăm să introduci codul de invitație');
+        window.alert('Te rugăm să introduci codul de invitație (minim 4 caractere)');
       }
       return;
     }
 
     if (!user) {
       if (typeof window !== 'undefined') {
-        window.alert('Trebuie să fii autentificat');
+        window.alert('Eroare: Nu ești autentificat. Te rugăm să te loghezi din nou.');
       }
       return;
+    }
+
+    if (typeof window !== 'undefined') {
+      window.alert('Caut cercul cu codul: ' + cleanCode);
     }
 
     setIsLoading(true);
 
     try {
-      console.log('Searching for circle with code:', cleanCode);
-      
-      // Find circle by invite code
-      const { data: circleData, error: circleError } = await supabase
-        .from('family_circles')
-        .select('*')
-        .eq('invite_code', cleanCode)
-        .single();
+      // Find circle by invite code using RPC function (bypasses RLS)
+      const { data: rpcData, error: rpcError } = await supabase
+        .rpc('lookup_circle_by_invite_code', { p_invite_code: cleanCode });
 
-      console.log('Circle search result:', { circleData, circleError });
+      console.log('Circle RPC search result:', { rpcData, rpcError });
 
-      if (circleError || !circleData) {
+      if (rpcError) {
+        console.log('RPC error:', rpcError);
+        if (typeof window !== 'undefined') {
+          window.alert('Eroare la căutare: ' + rpcError.message);
+        }
+        setIsLoading(false);
+        return;
+      }
+
+      // RPC returns array, get first result
+      const circleData = Array.isArray(rpcData) && rpcData.length > 0 ? rpcData[0] : null;
+
+      if (!circleData) {
         if (typeof window !== 'undefined') {
           window.alert('Cercul nu a fost găsit. Verifică codul și încearcă din nou.');
         }
         setIsLoading(false);
         return;
+      }
+
+      if (typeof window !== 'undefined') {
+        window.alert('Cerc găsit: ' + circleData.name + '. Se adaugă...');
       }
 
       // Check if already a member
@@ -108,8 +110,6 @@ export default function JoinCircleScreen() {
         return;
       }
 
-      console.log('Adding user to circle...');
-
       // Add as member
       const { error: memberError } = await supabase
         .from('circle_members')
@@ -123,7 +123,7 @@ export default function JoinCircleScreen() {
       if (memberError) {
         console.error('Member insert error:', memberError);
         if (typeof window !== 'undefined') {
-          window.alert('Eroare: ' + memberError.message);
+          window.alert('Eroare la adăugare: ' + memberError.message);
         }
         setIsLoading(false);
         return;
@@ -135,13 +135,13 @@ export default function JoinCircleScreen() {
       setCurrentCircle(circleData);
 
       if (typeof window !== 'undefined') {
-        window.alert('Bine ai venit! Te-ai alăturat cercului "' + circleData.name + '"');
+        window.alert('Felicitări! Te-ai alăturat cercului "' + circleData.name + '"');
       }
       router.replace('/(main)/family');
     } catch (error: any) {
       console.error('Join circle error:', error);
       if (typeof window !== 'undefined') {
-        window.alert('Eroare: ' + (error.message || 'Nu s-a putut alătura cercului'));
+        window.alert('Eroare neașteptată: ' + (error.message || JSON.stringify(error)));
       }
     } finally {
       setIsLoading(false);
@@ -217,11 +217,13 @@ export default function JoinCircleScreen() {
             <Text style={styles.createLinkText}>Create a new circle</Text>
           </TouchableOpacity>
 
-          {/* Sign Out Button */}
-          <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-            <Ionicons name="log-out" size={18} color="#EF4444" />
-            <Text style={styles.signOutText}>Sign Out</Text>
-          </TouchableOpacity>
+          {/* Sign Out Button - Only shown for parents */}
+          {profile?.role === 'parent' && (
+            <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+              <Ionicons name="log-out" size={18} color="#EF4444" />
+              <Text style={styles.signOutText}>Sign Out</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

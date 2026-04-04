@@ -29,33 +29,29 @@ export default function CreateCircleScreen() {
   const [createdCircle, setCreatedCircle] = useState<{ id: string; invite_code: string } | null>(null);
 
   const handleSignOut = async () => {
-    Alert.alert(
-      'Sign Out',
-      'Ești sigur că vrei să te deconectezi?',
-      [
-        { text: 'Anulează', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            await supabase.auth.signOut();
-            setUser(null);
-            setProfile(null);
-            router.replace('/(auth)/login');
-          }
-        }
-      ]
-    );
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm('Ești sigur că vrei să te deconectezi?');
+      if (confirmed) {
+        await supabase.auth.signOut();
+        setUser(null);
+        setProfile(null);
+        router.replace('/(auth)/login');
+      }
+    }
   };
 
   const handleCreate = async () => {
     if (!name.trim()) {
-      Alert.alert('Name Required', 'Please enter a name for your family circle');
+      if (typeof window !== 'undefined') {
+        window.alert('Te rugăm să introduci un nume pentru cercul familiei');
+      }
       return;
     }
 
     if (!user) {
-      Alert.alert('Error', 'You must be logged in');
+      if (typeof window !== 'undefined') {
+        window.alert('Trebuie să fii autentificat');
+      }
       return;
     }
 
@@ -96,7 +92,9 @@ export default function CreateCircleScreen() {
 
     } catch (error: any) {
       console.error('Create circle error:', error);
-      Alert.alert('Error', error.message || 'Failed to create circle');
+      if (typeof window !== 'undefined') {
+        window.alert('Eroare: ' + (error.message || 'Nu s-a putut crea cercul'));
+      }
     } finally {
       setIsLoading(false);
     }
@@ -138,17 +136,13 @@ This app lets us share locations and stay safe!`;
     
     try {
       await Clipboard.setStringAsync(fullMessage);
-      Alert.alert(
-        'Copied!',
-        `Code: ${createdCircle.invite_code}\n\nApp link and code copied to clipboard.`,
-        [{ text: 'OK' }]
-      );
+      if (typeof window !== 'undefined') {
+        window.alert(`Copiat!\n\nCod: ${createdCircle.invite_code}\n\nLink-ul și codul au fost copiate în clipboard.`);
+      }
     } catch (error) {
-      Alert.alert(
-        'Invite Code',
-        `Code: ${createdCircle.invite_code}\n\nApp: ${appUrl}`,
-        [{ text: 'OK' }]
-      );
+      if (typeof window !== 'undefined') {
+        window.alert(`Cod de invitație: ${createdCircle.invite_code}\n\nApp: ${appUrl}`);
+      }
     }
   };
 
@@ -306,11 +300,13 @@ This app lets us share locations and stay safe!`;
             <Text style={styles.joinButtonText}>Join Existing Circle</Text>
           </TouchableOpacity>
 
-          {/* Sign Out Button */}
-          <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-            <Ionicons name="log-out" size={18} color="#EF4444" />
-            <Text style={styles.signOutText}>Sign Out</Text>
-          </TouchableOpacity>
+          {/* Sign Out Button - Only shown for parents */}
+          {profile?.role === 'parent' && (
+            <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+              <Ionicons name="log-out" size={18} color="#EF4444" />
+              <Text style={styles.signOutText}>Sign Out</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
