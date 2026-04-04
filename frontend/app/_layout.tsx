@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore, useCircleStore, useRealtimeStore } from '../lib/store';
 import { SOSAlertOverlay } from '../components/SOSAlertOverlay';
 import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
+import { LanguageProvider } from '../lib/i18n';
 import 'react-native-url-polyfill/auto';
 
 export default function RootLayout() {
@@ -125,34 +126,38 @@ export default function RootLayout() {
   }
 
   return (
-    <SafeAreaProvider>
-      <StatusBar style="light" />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: '#0F172A' },
-          animation: 'slide_from_right',
-        }}
-      >
-        <Stack.Screen name="index" />
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="(main)" options={{ headerShown: false }} />
-        <Stack.Screen name="circle" options={{ headerShown: false }} />
-        <Stack.Screen name="place" options={{ headerShown: false }} />
-        <Stack.Screen name="sos" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
-        <Stack.Screen name="trip" options={{ headerShown: false }} />
-        <Stack.Screen name="settings" options={{ headerShown: false }} />
-      </Stack>
+    <LanguageProvider>
+      <SafeAreaProvider>
+        <StatusBar style="light" />
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: '#0F172A' },
+            animation: 'slide_from_right',
+          }}
+        >
+          <Stack.Screen name="language-select" />
+          <Stack.Screen name="index" />
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+          <Stack.Screen name="(main)" options={{ headerShown: false }} />
+          <Stack.Screen name="circle" options={{ headerShown: false }} />
+          <Stack.Screen name="place" options={{ headerShown: false }} />
+          <Stack.Screen name="sos" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
+          <Stack.Screen name="trip" options={{ headerShown: false }} />
+          <Stack.Screen name="settings" options={{ headerShown: false }} />
+          <Stack.Screen name="(child)" options={{ headerShown: false }} />
+        </Stack>
 
-      {/* Global SOS Alert Overlay - shows on top of all screens */}
-      <SOSAlertOverlay
-        sosEvent={globalSOSEvent}
-        memberName={sosEventMemberName || 'Family Member'}
-        memberId={globalSOSEvent?.user_id || ''}
-        onDismiss={handleDismissSOS}
-        onViewLocation={handleViewSOSLocation}
-      />
-    </SafeAreaProvider>
+        {/* Global SOS Alert Overlay - shows on top of all screens */}
+        <SOSAlertOverlay
+          sosEvent={globalSOSEvent}
+          memberName={sosEventMemberName || 'Family Member'}
+          memberId={globalSOSEvent?.user_id || ''}
+          onDismiss={handleDismissSOS}
+          onViewLocation={handleViewSOSLocation}
+        />
+      </SafeAreaProvider>
+    </LanguageProvider>
   );
 }
 

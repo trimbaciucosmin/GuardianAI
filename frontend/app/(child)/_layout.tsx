@@ -12,7 +12,6 @@ import { Stack, useRouter } from 'expo-router';
 import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
 import { useCircleStore, useAuthStore } from '../../lib/store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { startTamperMonitoring, stopTamperMonitoring } from '../../services/tamperAlertService';
 
 const CACHED_ROLE_KEY = '@guardian_cached_role';
 const PARENT_ROLES = ['owner', 'parent', 'guardian'];
@@ -23,17 +22,6 @@ export default function ChildLayout() {
   const { currentRole, currentCircle } = useCircleStore();
   const { user } = useAuthStore();
   const [accessGranted, setAccessGranted] = useState(false);
-
-  // Start tamper monitoring when child enters child mode
-  useEffect(() => {
-    if (accessGranted && user?.id && currentCircle?.id) {
-      console.log('[TAMPER] Starting tamper monitoring for child...');
-      startTamperMonitoring(user.id, currentCircle.id);
-    }
-    return () => {
-      stopTamperMonitoring();
-    };
-  }, [accessGranted, user?.id, currentCircle?.id]);
 
   useEffect(() => {
     const validateAccess = async () => {
