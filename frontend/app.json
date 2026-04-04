@@ -3,7 +3,9 @@
     "name": "Guardian AI",
     "slug": "guardian-ai",
     "version": "1.2.0",
-    "runtimeVersion": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "guardian-ai",
