@@ -89,6 +89,12 @@ export default function OnboardingScreen() {
       return;
     }
 
+    // Phone is required for children
+    if ((role === 'child' || role === 'teen') && !phone.trim()) {
+      Alert.alert('Phone Required', 'Please enter a phone number so parents can contact you in emergencies');
+      return;
+    }
+
     if (!user) {
       Alert.alert('Error', 'User session not found');
       return;
@@ -266,18 +272,23 @@ export default function OnboardingScreen() {
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Phone Number (Optional)</Text>
+              <Text style={styles.label}>
+                Phone Number {(role === 'child' || role === 'teen') ? '(Required)' : '(Optional)'}
+              </Text>
               <View style={styles.inputWrapper}>
                 <Ionicons name="call-outline" size={20} color="#64748B" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="+1 (555) 000-0000"
+                  placeholder="+40 7XX XXX XXX"
                   placeholderTextColor="#64748B"
                   value={phone}
                   onChangeText={setPhone}
                   keyboardType="phone-pad"
                 />
               </View>
+              {(role === 'child' || role === 'teen') && (
+                <Text style={styles.phoneHint}>Parents will use this number to call you in emergencies</Text>
+              )}
             </View>
 
             <View style={styles.inputContainer}>
@@ -574,5 +585,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#EF4444',
+  },
+  phoneHint: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 8,
+    fontStyle: 'italic',
   },
 });

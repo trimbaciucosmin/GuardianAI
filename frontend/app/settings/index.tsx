@@ -20,7 +20,16 @@ export default function SettingsScreen() {
   const { setCircles, setCurrentCircle, setMembers } = useCircleStore();
   const { clearLocations } = useLocationStore();
 
+  // Check if user is a child/teen
+  const isChild = profile?.role === 'child' || profile?.role === 'teen';
+
   const handleLogout = () => {
+    // Children cannot logout
+    if (isChild) {
+      Alert.alert('Not Available', 'Please ask your parent to manage your account.');
+      return;
+    }
+
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -43,7 +52,21 @@ export default function SettingsScreen() {
     ]);
   };
 
-  const settingsSections = [
+  // Different settings for parents vs children
+  const settingsSections = isChild ? [
+    {
+      title: 'Account',
+      items: [
+        { icon: 'person', label: 'Profile', route: '/settings/profile' },
+      ],
+    },
+    {
+      title: 'About',
+      items: [
+        { icon: 'help-circle', label: 'Help & Support', route: null },
+      ],
+    },
+  ] : [
     {
       title: 'Account',
       items: [
@@ -115,14 +138,16 @@ export default function SettingsScreen() {
           </View>
         ))}
 
-        {/* Logout Button */}
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out" size={20} color="#EF4444" />
-          <Text style={styles.logoutText}>Sign Out</Text>
-        </TouchableOpacity>
+        {/* Logout Button - Only for parents */}
+        {!isChild && (
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <Ionicons name="log-out" size={20} color="#EF4444" />
+            <Text style={styles.logoutText}>Sign Out</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Version */}
-        <Text style={styles.version}>Guardian AI v1.0.0</Text>
+        <Text style={styles.version}>Guardian AI v1.2.0</Text>
       </ScrollView>
     </SafeAreaView>
   );
