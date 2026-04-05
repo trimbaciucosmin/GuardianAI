@@ -1,6 +1,6 @@
 import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
-import { Platform } from 'react-native';
+import { Platform, AppState } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
 // Supabase configuration - Add your keys in .env file
@@ -62,7 +62,25 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: false,
   },
+  realtime: {
+    params: {
+      eventsPerSecond: 10, // Faster realtime updates
+    },
+  },
 });
+
+// Auto-refresh session when app comes to foreground
+if (!isWeb) {
+  AppState.addEventListener('change', async (state) => {
+    if (state === 'active') {
+      // Refresh session when app becomes active
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        await supabase.auth.refreshSession();
+      }
+    }
+  });
+}
 
 // Check if Supabase is properly configured
 export const isSupabaseConfigured = () => {

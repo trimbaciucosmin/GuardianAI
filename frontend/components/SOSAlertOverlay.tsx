@@ -14,17 +14,21 @@ import {
   Animated,
   Vibration,
   Modal,
+  Linking,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { SOSEvent } from '../types';
 import { getInitials, getAvatarColor, formatRelativeTime } from '../utils/helpers';
+import { supabase } from '../lib/supabase';
 
 interface SOSAlertOverlayProps {
   sosEvent: SOSEvent | null;
   memberName?: string;
   memberId?: string;
+  memberPhone?: string;
   onDismiss: () => void;
   onViewLocation: () => void;
 }
@@ -33,6 +37,7 @@ export const SOSAlertOverlay: React.FC<SOSAlertOverlayProps> = ({
   sosEvent,
   memberName = 'Family Member',
   memberId = '',
+  memberPhone,
   onDismiss,
   onViewLocation,
 }) => {
@@ -77,6 +82,69 @@ export const SOSAlertOverlay: React.FC<SOSAlertOverlayProps> = ({
       }).start();
     }
   }, [sosEvent]);
+
+  // Call the child who sent SOS
+  const handleCallChild = async () => {
+    try {
+      // Try to get phone number from profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('phone')
+        .eq('user_id', memberId)
+        .single();
+      
+      const phoneNumber = profile?.phone || memberPhone;
+      
+      if (phoneNumber) {
+        const phoneUrl = Platform.OS === 'ios' 
+          ? `telprompt:${phoneNumber}` 
+          : `tel:${phoneNumber}`;
+        await Linking.openURL(phoneUrl);
+      } else {
+        // Alert that no phone number is available
+        if (typeof window !== 'undefined') {
+          window.alert('Numărul de telefon nu este disponibil pentru acest membru.');
+        }
+      }
+    } catch (error) {
+      console.error('Call error:', error);
+    }
+  };
+
+  // Mark the person as safe (resolve SOS)
+  const handleMarkSafe = async () => {
+    try {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      // Update SOS status to resolved
+      await supabase
+        .from('sos_events')
+        .update({ 
+          status: 'resolved', 
+          ended_at: new Date().toISOString(),
+          resolved_by: 'parent' 
+        })
+        .eq('id', sosEvent?.id);
+
+      // Create notification that SOS was marked safe by parent
+      await supabase
+        .from('anomaly_alerts')
+        .insert({
+          user_id: memberId,
+          circle_id: sosEvent?.circle_id,
+          alert_type: 'sos_resolved',
+          title: 'SOS Resolved',
+          message: 'A parent has confirmed you are safe.',
+          severity: 'info',
+          is_read: false,
+          created_at: new Date().toISOString(),
+        });
+
+      onDismiss();
+    } catch (error) {
+      console.error('Mark safe error:', error);
+    }
+  };
 
   if (!sosEvent || sosEvent.status !== 'active') {
     return null;
@@ -130,13 +198,35 @@ export const SOSAlertOverlay: React.FC<SOSAlertOverlayProps> = ({
 
             {/* Actions */}
             <View style={styles.actions}>
+              {/* View Location Button */}
               <TouchableOpacity 
                 style={styles.viewButton}
                 onPress={onViewLocation}
               >
-                <Ionicons name="location" size={20} color="#FFFFFF" />
+                <Ionicons name="location" size={20} color="#DC2626" />
                 <Text style={styles.viewButtonText}>View Location</Text>
               </TouchableOpacity>
+
+              {/* Call and Safe buttons row */}
+              <View style={styles.actionRow}>
+                {/* Call Child Button */}
+                <TouchableOpacity 
+                  style={styles.callButton}
+                  onPress={handleCallChild}
+                >
+                  <Ionicons name="call" size={20} color="#FFFFFF" />
+                  <Text style={styles.callButtonText}>Call</Text>
+                </TouchableOpacity>
+
+                {/* I'm Safe / Mark Safe Button */}
+                <TouchableOpacity 
+                  style={styles.safeButton}
+                  onPress={handleMarkSafe}
+                >
+                  <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
+                  <Text style={styles.safeButtonText}>Mark Safe</Text>
+                </TouchableOpacity>
+              </View>
 
               <TouchableOpacity 
                 style={styles.dismissButton}
@@ -239,6 +329,10 @@ const styles = StyleSheet.create({
   actions: {
     gap: 10,
   },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
   viewButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -252,6 +346,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#DC2626',
+  },
+  callButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2563EB',
+    borderRadius: 12,
+    paddingVertical: 14,
+    gap: 8,
+  },
+  callButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  safeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#10B981',
+    borderRadius: 12,
+    paddingVertical: 14,
+    gap: 8,
+  },
+  safeButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   dismissButton: {
     alignItems: 'center',
