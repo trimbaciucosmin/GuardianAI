@@ -57,11 +57,26 @@ export default function FamilyScreen() {
   const { places, setPlaces } = usePlacesStore();
   
   const [loading, setLoading] = useState(true);
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [members, setLocalMembers] = useState<MemberWithDetails[]>([]);
   const [localPlaces, setLocalPlaces] = useState<Place[]>([]);
   
   const tabBarHeight = 60 + insets.bottom;
+
+  // Loading timeout - never block forever
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.log('[FAMILY] Loading timeout reached');
+        setLoadingTimeout(true);
+        setLoading(false);
+      }
+    }, 5000); // 5 second max
+
+    return () => clearTimeout(timeout);
+  }, [loading]);
 
   const formatLastSeen = (timestamp: string | null | undefined): string => {
     if (!timestamp) return 'Unknown';
@@ -93,7 +108,13 @@ export default function FamilyScreen() {
   };
 
   const fetchCircleData = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+    
+    console.log('[FAMILY] Starting data fetch...');
+    setLoadError(null);
     
     try {
       // Fetch user's circle memberships
@@ -103,9 +124,13 @@ export default function FamilyScreen() {
         .eq('user_id', user.id);
 
       if (circlesError) {
-        console.error('Error fetching circles:', circlesError);
+        console.error('[FAMILY] Error fetching circles:', circlesError);
+        setLoadError('Nu s-au putut încărca datele cercului');
+        setLoading(false);
         return;
       }
+
+      console.log('[FAMILY] Membership data:', membershipData?.length || 0, 'circles');
 
       if (membershipData && membershipData.length > 0) {
         // Fetch the actual circle details
@@ -200,8 +225,10 @@ export default function FamilyScreen() {
         setLocalPlaces([]);
       }
     } catch (error) {
-      console.error('Error fetching circle data:', error);
+      console.error('[FAMILY] Error fetching circle data:', error);
+      setLoadError('Eroare la încărcarea datelor');
     } finally {
+      console.log('[FAMILY] Fetch complete');
       setLoading(false);
       setRefreshing(false);
     }
@@ -330,6 +357,40 @@ This app lets us share locations and stay safe!`;
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#6366F1" />
         <Text style={styles.loadingText}>Loading family data...</Text>
+        {loadingTimeout && (
+          <View style={styles.timeoutContainer}>
+            <Text style={styles.timeoutText}>Durează mai mult decât de obicei...</Text>
+            <TouchableOpacity 
+              style={styles.retryButton}
+              onPress={() => {
+                setLoading(false);
+                setLoadingTimeout(false);
+              }}
+            >
+              <Text style={styles.retryButtonText}>Continuă Oricum</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  // Show error state with retry
+  if (loadError) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Ionicons name="alert-circle" size={48} color="#EF4444" />
+        <Text style={styles.errorText}>{loadError}</Text>
+        <TouchableOpacity 
+          style={styles.retryButton}
+          onPress={() => {
+            setLoadError(null);
+            setLoading(true);
+            fetchCircleData();
+          }}
+        >
+          <Text style={styles.retryButtonText}>Încearcă Din Nou</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -898,5 +959,33 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#EF4444',
+  },
+  // Timeout and error styles
+  timeoutContainer: {
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  timeoutText: {
+    color: '#94A3B8',
+    fontSize: 14,
+    marginBottom: 12,
+  },
+  retryButton: {
+    backgroundColor: '#6366F1',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 16,
+    marginTop: 12,
+    marginBottom: 16,
+    textAlign: 'center',
   },
 });

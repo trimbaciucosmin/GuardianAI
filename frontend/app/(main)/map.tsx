@@ -151,12 +151,16 @@ export default function MapScreen() {
   }, []);
 
   const fetchFamilyLocations = useCallback(async () => {
+    console.log('[MAP] fetchFamilyLocations called, circle:', currentCircle?.id, 'user:', user?.id);
+    
     if (!currentCircle || !user) {
+      console.log('[MAP] No circle or user - stopping load');
       setLoading(false);
       return;
     }
 
     try {
+      console.log('[MAP] Fetching circle members...');
       // Fetch circle members (without nested join)
       const { data: membersData, error: membersError } = await supabase
         .from('circle_members')
@@ -244,8 +248,9 @@ export default function MapScreen() {
         });
       }
     } catch (error) {
-      console.error('Error fetching locations:', error);
+      console.error('[MAP] Error fetching locations:', error);
     } finally {
+      console.log('[MAP] Fetch complete, setting loading false');
       setLoading(false);
     }
   }, [currentCircle, user, myLocation]);
