@@ -15,7 +15,11 @@ export default function CircleChoiceScreen() {
   const router = useRouter();
   const { profile } = useAuthStore();
   const userName = profile?.name?.split(' ')[0] || 'there';
+  const isParent = profile?.role === 'parent';
 
+  // For PARENTS: Create circle is primary
+  // For CHILDREN/TEENS: Join circle is primary
+  
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
@@ -26,57 +30,105 @@ export default function CircleChoiceScreen() {
           </View>
           <Text style={styles.title}>Bine ai venit, {userName}!</Text>
           <Text style={styles.subtitle}>
-            Cum vrei să continui?
+            {isParent ? 'Creează cercul familiei tale' : 'Cum vrei să continui?'}
           </Text>
         </View>
 
-        {/* Options */}
+        {/* Options - Different order based on role */}
         <View style={styles.options}>
-          {/* Join Circle - PRIMARY for invited users */}
-          <TouchableOpacity
-            style={styles.primaryOption}
-            onPress={() => router.push('/circle/join')}
-          >
-            <LinearGradient
-              colors={['#6366F1', '#8B5CF6']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.primaryGradient}
-            >
-              <View style={styles.optionIcon}>
-                <Ionicons name="enter" size={32} color="#FFFFFF" />
-              </View>
-              <View style={styles.optionText}>
-                <Text style={styles.primaryTitle}>Am un cod de invitație</Text>
-                <Text style={styles.primarySubtitle}>Alătură-te cercului familiei tale</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={24} color="#FFFFFF" />
-            </LinearGradient>
-          </TouchableOpacity>
+          {isParent ? (
+            <>
+              {/* PARENT: Create Circle is PRIMARY */}
+              <TouchableOpacity
+                style={styles.primaryOption}
+                onPress={() => router.push('/circle/create')}
+              >
+                <LinearGradient
+                  colors={['#10B981', '#059669']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.primaryGradient}
+                >
+                  <View style={styles.optionIcon}>
+                    <Ionicons name="add-circle" size={32} color="#FFFFFF" />
+                  </View>
+                  <View style={styles.optionText}>
+                    <Text style={styles.primaryTitle}>Creează cercul familiei</Text>
+                    <Text style={styles.primarySubtitle}>Adaugă membrii familiei și monitorizează-i</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={24} color="#FFFFFF" />
+                </LinearGradient>
+              </TouchableOpacity>
 
-          {/* Create Circle - Secondary */}
-          <TouchableOpacity
-            style={styles.secondaryOption}
-            onPress={() => router.push('/circle/create')}
-          >
-            <View style={styles.secondaryContent}>
-              <View style={[styles.optionIcon, styles.secondaryIcon]}>
-                <Ionicons name="add-circle" size={32} color="#6366F1" />
-              </View>
-              <View style={styles.optionText}>
-                <Text style={styles.secondaryTitle}>Creează un cerc nou</Text>
-                <Text style={styles.secondarySubtitle}>Începe propriul tău cerc de familie</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={24} color="#64748B" />
-            </View>
-          </TouchableOpacity>
+              {/* PARENT: Join Circle is secondary */}
+              <TouchableOpacity
+                style={styles.secondaryOption}
+                onPress={() => router.push('/circle/join')}
+              >
+                <View style={styles.secondaryContent}>
+                  <View style={[styles.optionIcon, styles.secondaryIcon]}>
+                    <Ionicons name="enter" size={32} color="#6366F1" />
+                  </View>
+                  <View style={styles.optionText}>
+                    <Text style={styles.secondaryTitle}>Am un cod de invitație</Text>
+                    <Text style={styles.secondarySubtitle}>Alătură-te unui cerc existent</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={24} color="#64748B" />
+                </View>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              {/* CHILD/TEEN: Join Circle is PRIMARY */}
+              <TouchableOpacity
+                style={styles.primaryOption}
+                onPress={() => router.push('/circle/join')}
+              >
+                <LinearGradient
+                  colors={['#6366F1', '#8B5CF6']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.primaryGradient}
+                >
+                  <View style={styles.optionIcon}>
+                    <Ionicons name="enter" size={32} color="#FFFFFF" />
+                  </View>
+                  <View style={styles.optionText}>
+                    <Text style={styles.primaryTitle}>Am un cod de invitație</Text>
+                    <Text style={styles.primarySubtitle}>Alătură-te cercului familiei tale</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={24} color="#FFFFFF" />
+                </LinearGradient>
+              </TouchableOpacity>
+
+              {/* CHILD/TEEN: Create Circle is secondary (rarely used) */}
+              <TouchableOpacity
+                style={styles.secondaryOption}
+                onPress={() => router.push('/circle/create')}
+              >
+                <View style={styles.secondaryContent}>
+                  <View style={[styles.optionIcon, styles.secondaryIcon]}>
+                    <Ionicons name="add-circle" size={32} color="#6366F1" />
+                  </View>
+                  <View style={styles.optionText}>
+                    <Text style={styles.secondaryTitle}>Creează un cerc nou</Text>
+                    <Text style={styles.secondarySubtitle}>Începe propriul tău cerc</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={24} color="#64748B" />
+                </View>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
         {/* Info */}
         <View style={styles.infoBox}>
           <Ionicons name="information-circle" size={20} color="#6366F1" />
           <Text style={styles.infoText}>
-            Dacă ai primit un cod de invitație de la cineva, alege prima opțiune pentru a te alătura cercului lor.
+            {isParent 
+              ? 'După ce creezi cercul, vei primi un cod de invitație pe care îl poți trimite membrilor familiei.'
+              : 'Dacă ai primit un cod de invitație de la un părinte, alege prima opțiune pentru a te alătura cercului lor.'
+            }
           </Text>
         </View>
       </View>
