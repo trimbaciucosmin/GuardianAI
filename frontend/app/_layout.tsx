@@ -56,27 +56,58 @@ export default function RootLayout() {
   }, [lastSOSEvent, user, members]);
 
   useEffect(() => {
-    // Check initial session
+    // Check initial session with retry
     const initAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        setUser(session?.user ?? null);
-        
-        if (session?.user) {
-          // Fetch profile
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('user_id', session.user.id)
-            .single();
-          setProfile(profile);
+      let retries = 3;
+      
+      while (retries > 0) {
+        try {
+          // Try to get session
+          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+          
+          if (sessionError) {
+            console.log('[AUTH] Session error, retrying...', sessionError);
+            retries--;
+            if (retries > 0) {
+              await new Promise(r => setTimeout(r, 1000));
+              continue;
+            }
+          }
+          
+          setUser(session?.user ?? null);
+          
+          if (session?.user) {
+            // Refresh the session to ensure it's valid
+            const { data: refreshData } = await supabase.auth.refreshSession();
+            if (refreshData.session) {
+              setUser(refreshData.session.user);
+            }
+            
+            // Fetch profile
+            const { data: profile, error: profileError } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('user_id', session.user.id)
+              .single();
+            
+            if (!profileError && profile) {
+              setProfile(profile);
+            }
+          }
+          
+          // Success - exit loop
+          break;
+        } catch (error) {
+          console.error('[AUTH] Init error:', error);
+          retries--;
+          if (retries > 0) {
+            await new Promise(r => setTimeout(r, 1000));
+          }
         }
-      } catch (error) {
-        console.error('Auth init error:', error);
-      } finally {
-        setLoading(false);
-        setIsInitialized(true);
       }
+      
+      setLoading(false);
+      setIsInitialized(true);
     };
 
     initAuth();
