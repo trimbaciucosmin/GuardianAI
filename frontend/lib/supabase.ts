@@ -3,9 +3,9 @@ import { createClient } from '@supabase/supabase-js';
 import { Platform, AppState } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
-// Supabase configuration - Add your keys in .env file
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://your-project.supabase.co';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'your-anon-key';
+// Supabase configuration - Hardcoded for production builds
+const supabaseUrl = 'https://nozwlzlaojjmciwjtuek.supabase.co';
+const supabaseAnonKey = 'sb_publishable_aCw_U7ByBNO6SH5voYN3Dg_ZAdnAKWc';
 
 // Web-safe storage check
 const isWeb = Platform.OS === 'web';
@@ -84,5 +84,5 @@ if (!isWeb) {
 
 // Check if Supabase is properly configured
 export const isSupabaseConfigured = () => {
-  return supabaseUrl !== 'https://your-project.supabase.co' && supabaseAnonKey !== 'your-anon-key';
+  return supabaseUrl.includes('supabase.co') && supabaseAnonKey.length > 10;
 };
