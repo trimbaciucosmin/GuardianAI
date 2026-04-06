@@ -27,13 +27,18 @@
         ]
       }
     },
-    "android": {
+   "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#0F172A"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.guardianai.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyAHT4mZQH_VJwwdJCt9Y5bitd1jrriVZLI"
+        }
+      },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
