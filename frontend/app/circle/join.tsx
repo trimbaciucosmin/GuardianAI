@@ -1,3 +1,11 @@
+
+Pas 4: Editează al treilea (și ultimul) fișier
+Mergi la: https://github.com/trimbaciucosmin/GuardianAI/tree/main/frontend/app
+Click pe folder circle
+Click pe fișierul join.tsx
+Click pe iconița creion (Edit) din dreapta sus
+Selectează tot (Ctrl+A) și șterge
+Copiază tot textul de mai jos și lipește-l:
 import React, { useState } from 'react';
 import {
   View,
@@ -13,6 +21,7 @@ import {
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore, useCircleStore } from '../../lib/store';
 
@@ -37,9 +46,6 @@ export default function JoinCircleScreen() {
 
   const handleJoin = async () => {
     console.log('=== JOIN BUTTON PRESSED ===');
-    console.log('Code value:', code);
-    console.log('User:', user?.id);
-    
     const cleanCode = code.trim().toUpperCase();
     
     if (!cleanCode || cleanCode.length < 4) {
@@ -56,21 +62,13 @@ export default function JoinCircleScreen() {
       return;
     }
 
-    if (typeof window !== 'undefined') {
-      window.alert('Caut cercul cu codul: ' + cleanCode);
-    }
-
     setIsLoading(true);
 
     try {
-      // Find circle by invite code using RPC function (bypasses RLS)
       const { data: rpcData, error: rpcError } = await supabase
         .rpc('lookup_circle_by_invite_code', { p_invite_code: cleanCode });
 
-      console.log('Circle RPC search result:', { rpcData, rpcError });
-
       if (rpcError) {
-        console.log('RPC error:', rpcError);
         if (typeof window !== 'undefined') {
           window.alert('Eroare la căutare: ' + rpcError.message);
         }
@@ -78,7 +76,6 @@ export default function JoinCircleScreen() {
         return;
       }
 
-      // RPC returns array, get first result
       const circleData = Array.isArray(rpcData) && rpcData.length > 0 ? rpcData[0] : null;
 
       if (!circleData) {
@@ -89,11 +86,6 @@ export default function JoinCircleScreen() {
         return;
       }
 
-      if (typeof window !== 'undefined') {
-        window.alert('Cerc găsit: ' + circleData.name + '. Se adaugă...');
-      }
-
-      // Check if already a member
       const { data: existingMember } = await supabase
         .from('circle_members')
         .select('*')
@@ -110,7 +102,6 @@ export default function JoinCircleScreen() {
         return;
       }
 
-      // Add as member
       const { error: memberError } = await supabase
         .from('circle_members')
         .insert({
@@ -121,7 +112,6 @@ export default function JoinCircleScreen() {
         });
 
       if (memberError) {
-        console.error('Member insert error:', memberError);
         if (typeof window !== 'undefined') {
           window.alert('Eroare la adăugare: ' + memberError.message);
         }
@@ -129,18 +119,31 @@ export default function JoinCircleScreen() {
         return;
       }
 
-      console.log('Successfully joined circle!');
-      
       addCircle(circleData);
       setCurrentCircle(circleData);
-      setCurrentRole(profile?.role || 'child');  // Set the role in store
+      
+      const memberRole = profile?.role || 'child';
+      setCurrentRole(memberRole);
+      
+      try {
+        await AsyncStorage.setItem('@guardian_cached_role', memberRole);
+      } catch (e) {
+        console.log('Cache write error:', e);
+      }
 
       if (typeof window !== 'undefined') {
         window.alert('Felicitări! Te-ai alăturat cercului "' + circleData.name + '"');
       }
-      router.replace('/(main)/family');
+      
+      const CHILD_ROLES = ['child', 'teen'];
+      if (CHILD_ROLES.includes(memberRole.toLowerCase())) {
+        console.log('[JOIN] Child role detected → /(child)/home');
+        router.replace('/(child)/home');
+      } else {
+        console.log('[JOIN] Parent role detected → /(main)/family');
+        router.replace('/(main)/family');
+      }
     } catch (error: any) {
-      console.error('Join circle error:', error);
       if (typeof window !== 'undefined') {
         window.alert('Eroare neașteptată: ' + (error.message || JSON.stringify(error)));
       }
@@ -155,7 +158,6 @@ export default function JoinCircleScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
@@ -164,7 +166,6 @@ export default function JoinCircleScreen() {
           <View style={{ width: 44 }} />
         </View>
 
-        {/* Content */}
         <View style={styles.content}>
           <View style={styles.iconWrapper}>
             <Ionicons name="enter" size={48} color="#10B981" />
@@ -218,7 +219,6 @@ export default function JoinCircleScreen() {
             <Text style={styles.createLinkText}>Create a new circle</Text>
           </TouchableOpacity>
 
-          {/* Sign Out Button - Only shown for parents */}
           {profile?.role === 'parent' && (
             <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
               <Ionicons name="log-out" size={18} color="#EF4444" />
