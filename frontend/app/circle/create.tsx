@@ -147,12 +147,11 @@ This app lets us share locations and stay safe!`;
   };
 
   const handleDone = () => {
-    router.replace('/(main)/map');
-  };
-
-  const handleSkip = () => {
+    // Go directly to Family screen (main dashboard) - NOT map
     router.replace('/(main)/family');
   };
+
+  // Remove handleSkip - no longer needed after creating circle
 
   // Show invite screen after circle is created
   if (createdCircle) {
@@ -215,12 +214,20 @@ This app lets us share locations and stay safe!`;
               style={styles.primaryGradient}
             >
               <Ionicons name="person-add" size={22} color="#FFFFFF" />
-              <Text style={styles.primaryButtonText}>Invite Family Members</Text>
+              <Text style={styles.primaryButtonText}>Invită Membri</Text>
             </LinearGradient>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.secondaryButton} onPress={handleDone}>
-            <Text style={styles.secondaryButtonText}>Continue to App</Text>
+          <TouchableOpacity style={styles.continueButton} onPress={handleDone}>
+            <LinearGradient
+              colors={['#10B981', '#059669']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.primaryGradient}
+            >
+              <Ionicons name="arrow-forward" size={22} color="#FFFFFF" />
+              <Text style={styles.primaryButtonText}>Continuă în Aplicație</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -240,9 +247,7 @@ This app lets us share locations and stay safe!`;
             <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Create Circle</Text>
-          <TouchableOpacity onPress={handleSkip}>
-            <Text style={styles.skipText}>Skip</Text>
-          </TouchableOpacity>
+          <View style={{ width: 44 }} />
         </View>
 
         {/* Content */}
@@ -549,6 +554,12 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
   },
   primaryButton: {
+    width: '100%',
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  continueButton: {
     width: '100%',
     borderRadius: 14,
     overflow: 'hidden',

@@ -43,6 +43,7 @@ export default function MapScreen() {
   const { t } = useLanguage();
   
   const [loading, setLoading] = useState(true);
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [showInviteCode, setShowInviteCode] = useState(false);
   const [selectedMember, setSelectedMember] = useState<FamilyMember | null>(null);
@@ -57,6 +58,19 @@ export default function MapScreen() {
   const userName = profile?.name?.split(' ')[0] || 'there';
   const tabBarHeight = 56 + insets.bottom;
   const [locationError, setLocationError] = useState<string | null>(null);
+
+  // Loading timeout - don't block forever
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.log('[MAP] Loading timeout - forcing load complete');
+        setLoadingTimeout(true);
+        setLoading(false);
+      }
+    }, 5000); // 5 second timeout
+
+    return () => clearTimeout(timeout);
+  }, [loading]);
 
   // Get current user's real location
   const getCurrentLocation = useCallback(async () => {
@@ -324,6 +338,23 @@ export default function MapScreen() {
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#6366F1" />
         <Text style={styles.loadingText}>Loading map...</Text>
+        {loadingTimeout && (
+          <View style={styles.loadingFallback}>
+            <Text style={styles.loadingFallbackText}>Taking longer than expected...</Text>
+            <TouchableOpacity 
+              style={styles.fallbackButton}
+              onPress={() => setLoading(false)}
+            >
+              <Text style={styles.fallbackButtonText}>Continue Anyway</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.fallbackButtonSecondary}
+              onPress={() => router.replace('/(main)/family')}
+            >
+              <Text style={styles.fallbackButtonSecondaryText}>Go to Family</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     );
   }
@@ -1044,5 +1075,36 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 12,
     textAlign: 'center',
+  },
+  // Loading fallback styles
+  loadingFallback: {
+    marginTop: 24,
+    alignItems: 'center',
+  },
+  loadingFallbackText: {
+    color: '#94A3B8',
+    fontSize: 14,
+    marginBottom: 16,
+  },
+  fallbackButton: {
+    backgroundColor: '#6366F1',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  fallbackButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  fallbackButtonSecondary: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  fallbackButtonSecondaryText: {
+    color: '#6366F1',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
