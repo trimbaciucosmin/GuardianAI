@@ -1,8 +1,9 @@
-Repară fișierul _layout.tsx
-Mergi la: https://github.com/trimbaciucosmin/GuardianAI/blob/main/frontend/app/(main)/_layout.tsx
-Click pe iconița creion (Edit)
-Ctrl+A → Delete (șterge tot)
-Copiază codul de mai jos (începe cu import):
+Click Edit (creion) → Ctrl+A → Delete
+
+Apoi copiază DOAR ce e între liniile de mai jos:
+
+===== ÎNCEPE CODUL (copiază de la linia de sub aceasta) =====
+
 import React, { useEffect, useState } from 'react';
 import { Tabs, useRouter } from 'expo-router';
 import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
@@ -27,7 +28,7 @@ export default function MainLayout() {
     const validateAccess = async () => {
       const storeRole = currentRole?.toLowerCase()?.trim() || null;
       const profileRole = profile?.role?.toLowerCase()?.trim() || null;
-      let cachedRole: string | null = null;
+      let cachedRole = null;
       try {
         cachedRole = await AsyncStorage.getItem(CACHED_ROLE_KEY);
         cachedRole = cachedRole?.toLowerCase()?.trim() || null;
@@ -53,28 +54,7 @@ export default function MainLayout() {
   }
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: {
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: tabBarHeight,
-          backgroundColor: 'rgba(15, 23, 42, 0.92)',
-          borderTopWidth: 0.5,
-          borderTopColor: 'rgba(148, 163, 184, 0.1)',
-          paddingTop: 6,
-          paddingBottom: insets.bottom + 6,
-          elevation: 0,
-        },
-        tabBarActiveTintColor: '#818CF8',
-        tabBarInactiveTintColor: 'rgba(148, 163, 184, 0.6)',
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '500', marginTop: 2 },
-        tabBarIconStyle: { marginBottom: -2 },
-      }}
-    >
+    <Tabs screenOptions={{ headerShown: false, tabBarStyle: { position: 'absolute', bottom: 0, left: 0, right: 0, height: tabBarHeight, backgroundColor: 'rgba(15, 23, 42, 0.92)', borderTopWidth: 0.5, borderTopColor: 'rgba(148, 163, 184, 0.1)', paddingTop: 6, paddingBottom: insets.bottom + 6, elevation: 0 }, tabBarActiveTintColor: '#818CF8', tabBarInactiveTintColor: 'rgba(148, 163, 184, 0.6)', tabBarLabelStyle: { fontSize: 11, fontWeight: '500', marginTop: 2 }, tabBarIconStyle: { marginBottom: -2 } }}>
       <Tabs.Screen name="map" options={{ title: 'Map', tabBarIcon: ({ color, focused }) => (<View style={focused ? styles.activeIconContainer : undefined}><Ionicons name={focused ? "location" : "location-outline"} size={22} color={color} /></View>) }} />
       <Tabs.Screen name="activity" options={{ title: 'Activity', tabBarIcon: ({ color, focused }) => (<View style={focused ? styles.activeIconContainer : undefined}><Ionicons name={focused ? "pulse" : "pulse-outline"} size={22} color={color} /></View>) }} />
       <Tabs.Screen name="phone" options={{ title: 'Phone', tabBarIcon: ({ color, focused }) => (<View style={focused ? styles.activeIconContainer : undefined}><Ionicons name={focused ? "phone-portrait" : "phone-portrait-outline"} size={22} color={color} /></View>) }} />
