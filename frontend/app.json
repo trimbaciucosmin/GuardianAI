@@ -33,7 +33,7 @@
         "backgroundColor": "#0F172A"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.guardianai.app",
+          "package": "com.guardianai.app",
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyAHT4mZQH_VJwwdJCt9Y5bitd1jrriVZLI"
