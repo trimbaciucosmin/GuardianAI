@@ -342,25 +342,26 @@ export default function ChildHomeScreen() {
             <Ionicons name="people-circle-outline" size={80} color="#6366F1" />
           </View>
           <Text style={styles.joinCircleTitle}>
-            {t('joinCircle')}
+            {t('joinYourFamily')}
           </Text>
           <Text style={styles.joinCircleSubtitle}>
             Introdu codul de invitație primit de la un părinte pentru a te alătura cercului familiei.
           </Text>
 
+          {/* Main Join Button - Very Prominent */}
           <TouchableOpacity
             style={styles.joinCircleBtn}
             onPress={() => router.push('/circle/join')}
             activeOpacity={0.8}
           >
             <LinearGradient
-              colors={['#6366F1', '#4F46E5']}
+              colors={['#10B981', '#059669']}
               style={styles.joinCircleBtnGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
-              <Ionicons name="enter-outline" size={24} color="#FFFFFF" />
-              <Text style={styles.joinCircleBtnText}>Alătură-te unui Cerc</Text>
+              <Ionicons name="enter-outline" size={28} color="#FFFFFF" />
+              <Text style={styles.joinCircleBtnText}>{t('joinFamilyCircle')}</Text>
             </LinearGradient>
           </TouchableOpacity>
 

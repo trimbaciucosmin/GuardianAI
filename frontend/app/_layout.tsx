@@ -94,6 +94,51 @@ export default function RootLayout() {
     }
   }, [lastSOSEvent, user, members]);
 
+  // POLLING FALLBACK for SOS - in case realtime fails
+  useEffect(() => {
+    if (!user?.id || !currentCircle?.id) return;
+
+    const pollForActiveSOS = async () => {
+      try {
+        // Query for any active SOS events in the circle
+        const { data: activeSOSEvents, error } = await supabase
+          .from('sos_events')
+          .select(`
+            *,
+            profiles:user_id (name, phone)
+          `)
+          .eq('circle_id', currentCircle.id)
+          .eq('status', 'active')
+          .neq('user_id', user.id)
+          .order('started_at', { ascending: false })
+          .limit(1);
+
+        if (error) {
+          console.log('[SOS:POLL] Error:', error);
+          return;
+        }
+
+        if (activeSOSEvents && activeSOSEvents.length > 0) {
+          const sosEvent = activeSOSEvents[0];
+          // Only set if not already showing this SOS
+          if (!globalSOSEvent || globalSOSEvent.id !== sosEvent.id) {
+            const memberName = (sosEvent.profiles as any)?.name || 'Family Member';
+            console.log('[SOS:POLL] Found active SOS from:', memberName);
+            setGlobalSOSEvent(sosEvent, memberName);
+          }
+        }
+      } catch (err) {
+        console.log('[SOS:POLL] Exception:', err);
+      }
+    };
+
+    // Poll immediately and then every 10 seconds
+    pollForActiveSOS();
+    const interval = setInterval(pollForActiveSOS, 10000);
+
+    return () => clearInterval(interval);
+  }, [user?.id, currentCircle?.id, globalSOSEvent?.id]);
+
   useEffect(() => {
     // Check initial session with retry
     const initAuth = async () => {
@@ -140,8 +185,10 @@ export default function RootLayout() {
               setCurrentRole(circleData.role);
               console.log('[AUTH] Auto-loaded circle and role for user');
             } else {
-              // User has no circle - use profile role
+              // CRITICAL: User has NO circle - explicitly set to null
+              setCurrentCircle(null);
               setCurrentRole(profile?.role || null);
+              console.log('[AUTH] User has no circle - set to null');
             }
           }
           
@@ -180,6 +227,8 @@ export default function RootLayout() {
           setCurrentCircle(circleData.circle);
           setCurrentRole(circleData.role);
         } else {
+          // No circle - set explicitly to null
+          setCurrentCircle(null);
           setCurrentRole(profile?.role || null);
         }
       } else {

@@ -69,6 +69,8 @@ export const translations = {
     guardian: 'Guardian',
     owner: 'Owner',
     you: 'You',
+    joinYourFamily: 'Join Your Family',
+    joinFamilyCircle: 'Join Family Circle',
     
     // Member Status
     statusActive: 'Active',
@@ -349,6 +351,8 @@ export const translations = {
     guardian: 'Gardian',
     owner: 'Proprietar',
     you: 'Tu',
+    joinYourFamily: 'Alătură-te Familiei',
+    joinFamilyCircle: 'Intră în Cercul Familiei',
     
     // Member Status
     statusActive: 'Activ',
