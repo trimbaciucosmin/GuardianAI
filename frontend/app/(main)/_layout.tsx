@@ -1,9 +1,3 @@
-Click Edit (creion) → Ctrl+A → Delete
-
-Apoi copiază DOAR ce e între liniile de mai jos:
-
-===== ÎNCEPE CODUL (copiază de la linia de sub aceasta) =====
-
 import React, { useEffect, useState } from 'react';
 import { Tabs, useRouter } from 'expo-router';
 import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
