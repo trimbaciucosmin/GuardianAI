@@ -16,6 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import { useAuthStore, useCircleStore, useLocationStore } from '../../lib/store';
 import { supabase } from '../../lib/supabase';
+import { useLanguage } from '../../lib/i18n';
 
 const { width, height } = Dimensions.get('window');
 
@@ -39,9 +40,11 @@ export default function MapScreen() {
   const { profile, user } = useAuthStore();
   const { currentCircle, members } = useCircleStore();
   const { mapMembers, setMapMembers } = useLocationStore();
+  const { t } = useLanguage();
   
   const [loading, setLoading] = useState(true);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
+  const [showInviteCode, setShowInviteCode] = useState(false);
   const [selectedMember, setSelectedMember] = useState<FamilyMember | null>(null);
   const [myLocation, setMyLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [mapRegion, setMapRegion] = useState({
@@ -446,8 +449,8 @@ export default function MapScreen() {
           </View>
         </View>
 
-        {/* Selected Member Card */}
-        {selectedMember && (
+        {/* Selected Member Card - Show when there are other members */}
+        {selectedMember && selectedMember.user_id !== user?.id ? (
           <View style={styles.childCardContainer}>
             <View style={styles.childCard}>
               <View style={styles.avatarSection}>
@@ -465,7 +468,7 @@ export default function MapScreen() {
                   <Ionicons name="location" size={13} color="#94A3B8" />
                   <Text style={styles.locationText}>{selectedMember.placeName}</Text>
                 </View>
-                <Text style={styles.lastSeen}>Last updated {selectedMember.lastSeen}</Text>
+                <Text style={styles.lastSeen}>{t('lastUpdated')} {selectedMember.lastSeen}</Text>
               </View>
               
               <View style={styles.batterySection}>
@@ -484,9 +487,9 @@ export default function MapScreen() {
             </View>
 
             {/* Member selector pills */}
-            {familyMembers.length > 1 && (
+            {familyMembers.filter(m => m.user_id !== user?.id).length > 1 && (
               <View style={styles.memberPills}>
-                {familyMembers.map((member) => (
+                {familyMembers.filter(m => m.user_id !== user?.id).map((member) => (
                   <TouchableOpacity
                     key={member.id}
                     style={[
@@ -503,6 +506,37 @@ export default function MapScreen() {
                     </Text>
                   </TouchableOpacity>
                 ))}
+              </View>
+            )}
+          </View>
+        ) : (
+          /* No children card - shown when only the current user is in the circle */
+          <View style={styles.childCardContainer}>
+            <TouchableOpacity 
+              style={styles.noChildCard}
+              onPress={() => setShowInviteCode(!showInviteCode)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.noChildIcon}>
+                <Ionicons name="person-add-outline" size={32} color="#64748B" />
+              </View>
+              <View style={styles.noChildInfo}>
+                <Text style={styles.noChildTitle}>{t('noChildConnected')}</Text>
+                <Text style={styles.noChildSubtitle}>{t('inviteChildHint')}</Text>
+              </View>
+              <Ionicons name={showInviteCode ? "chevron-up" : "chevron-down"} size={20} color="#64748B" />
+            </TouchableOpacity>
+            
+            {/* Invite Code Section */}
+            {showInviteCode && currentCircle?.invite_code && (
+              <View style={styles.inviteCodeCard}>
+                <Text style={styles.inviteCodeLabel}>{t('inviteCode')}</Text>
+                <View style={styles.inviteCodeBox}>
+                  <Text style={styles.inviteCodeText}>{currentCircle.invite_code}</Text>
+                </View>
+                <Text style={styles.inviteCodeHint}>
+                  {t('shareInviteCode')}
+                </Text>
               </View>
             )}
           </View>
@@ -940,5 +974,74 @@ const styles = StyleSheet.create({
     color: '#10B981',
     fontSize: 12,
     fontWeight: '500',
+  },
+  // No child connected card
+  noChildCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(51, 65, 85, 0.4)',
+  },
+  noChildIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: 'rgba(100, 116, 139, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  noChildInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  noChildTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#E2E8F0',
+  },
+  noChildSubtitle: {
+    fontSize: 13,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  // Invite code card
+  inviteCodeCard: {
+    marginTop: 12,
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  inviteCodeLabel: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontWeight: '600',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  inviteCodeBox: {
+    backgroundColor: '#1E293B',
+    borderRadius: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderWidth: 2,
+    borderColor: '#6366F1',
+    borderStyle: 'dashed',
+  },
+  inviteCodeText: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 6,
+  },
+  inviteCodeHint: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 12,
+    textAlign: 'center',
   },
 });

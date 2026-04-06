@@ -282,6 +282,8 @@ export const translations = {
     gettingLocationShort: 'Getting location...',
     continueWithoutLocation: 'Continue without location',
     lastSync: 'Last sync',
+    lastUpdated: 'Last updated',
+    shareInviteCode: 'Share this code with your child to join the family',
   },
   
   ro: {
@@ -560,6 +562,8 @@ export const translations = {
     gettingLocationShort: 'Se obține locația...',
     continueWithoutLocation: 'Continuă fără locație',
     lastSync: 'Ultima sincronizare',
+    lastUpdated: 'Ultima actualizare',
+    shareInviteCode: 'Împărtășește acest cod cu copilul pentru a se alătura familiei',
   },
 };
 
