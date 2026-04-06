@@ -1,7 +1,3 @@
-Click Edit (creion) → Ctrl+A → Delete
-
-Copiază DOAR textul din chenarul gri de mai jos (care începe cu import):
-
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
