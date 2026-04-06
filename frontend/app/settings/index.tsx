@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -17,11 +17,31 @@ import { getInitials, getAvatarColor } from '../../utils/helpers';
 export default function SettingsScreen() {
   const router = useRouter();
   const { user, profile, logout } = useAuthStore();
-  const { setCircles, setCurrentCircle, setMembers } = useCircleStore();
+  const { currentCircle, setCircles, setCurrentCircle, setMembers } = useCircleStore();
   const { clearLocations } = useLocationStore();
+  const [memberRole, setMemberRole] = useState<string | null>(null);
 
-  // Check if user is a child/teen
-  const isChild = profile?.role === 'child' || profile?.role === 'teen';
+  // Check role from circle_members as backup
+  useEffect(() => {
+    const checkMemberRole = async () => {
+      if (user?.id && currentCircle?.id) {
+        const { data } = await supabase
+          .from('circle_members')
+          .select('role')
+          .eq('user_id', user.id)
+          .eq('circle_id', currentCircle.id)
+          .single();
+        if (data?.role) {
+          setMemberRole(data.role);
+        }
+      }
+    };
+    checkMemberRole();
+  }, [user?.id, currentCircle?.id]);
+
+  // Check if user is a child/teen - check both profile.role and circle_members.role
+  const isChild = profile?.role === 'child' || profile?.role === 'teen' || 
+                  memberRole === 'child' || memberRole === 'teen';
 
   const handleLogout = () => {
     // Children cannot logout

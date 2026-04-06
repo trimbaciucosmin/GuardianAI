@@ -58,7 +58,7 @@ export default function ChildHomeScreen() {
   const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
   const hasCircle = !!currentCircle?.id;
 
-  // Send location + battery to backend
+  // Send location + battery to backend AND Supabase
   const sendToBackend = useCallback(async (
     loc: Location.LocationObject | null, 
     bat: number, 
@@ -66,6 +66,48 @@ export default function ChildHomeScreen() {
     address: string = ''
   ) => {
     if (!user?.id || !currentCircle?.id || !loc) return;
+    
+    const timestamp = new Date().toISOString();
+    
+    // Save to Supabase for realtime updates (so parents see online status)
+    try {
+      await supabase
+        .from('live_locations')
+        .upsert({
+          user_id: user.id,
+          circle_id: currentCircle.id,
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+          accuracy: loc.coords.accuracy || 0,
+          speed: loc.coords.speed || 0,
+          heading: loc.coords.heading || 0,
+          timestamp: timestamp,
+          updated_at: timestamp,
+        }, {
+          onConflict: 'user_id,circle_id'
+        });
+      
+      // Also update device_status
+      await supabase
+        .from('device_status')
+        .upsert({
+          user_id: user.id,
+          battery_level: bat,
+          is_charging: charging,
+          gps_enabled: true,
+          network_type: 'mobile',
+          last_seen: timestamp,
+          updated_at: timestamp,
+        }, {
+          onConflict: 'user_id'
+        });
+        
+      console.log(`[CHILD:SUPABASE] Updated location and device status`);
+    } catch (err) {
+      console.log('[CHILD:SUPABASE] Error:', err);
+    }
+    
+    // Also send to backend API if needed
     try {
       const response = await fetch(`${BACKEND_URL}/api/child/location`, {
         method: 'POST',
@@ -80,7 +122,7 @@ export default function ChildHomeScreen() {
           is_charging: charging,
           address: address,
           speed: loc.coords.speed || 0,
-          timestamp: new Date().toISOString(),
+          timestamp: timestamp,
         }),
       });
       if (response.ok) {
@@ -308,6 +350,16 @@ export default function ChildHomeScreen() {
               <Ionicons name="enter-outline" size={24} color="#FFFFFF" />
               <Text style={styles.joinCircleBtnText}>Alătură-te unui Cerc</Text>
             </LinearGradient>
+          </TouchableOpacity>
+
+          {/* Add Phone Number Button */}
+          <TouchableOpacity
+            style={styles.addPhoneBtn}
+            onPress={() => router.push('/settings/profile')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="call-outline" size={20} color="#6366F1" />
+            <Text style={styles.addPhoneBtnText}>Adaugă număr de telefon</Text>
           </TouchableOpacity>
 
           <Text style={styles.joinCircleHint}>
@@ -627,6 +679,24 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
     paddingHorizontal: 16,
+  },
+  addPhoneBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    marginBottom: 20,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.3)',
+  },
+  addPhoneBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#6366F1',
   },
   // SOS
   sosSection: {
