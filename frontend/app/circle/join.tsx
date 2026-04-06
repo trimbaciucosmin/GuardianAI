@@ -19,7 +19,7 @@ import { useAuthStore, useCircleStore } from '../../lib/store';
 export default function JoinCircleScreen() {
   const router = useRouter();
   const { user, profile, setUser, setProfile } = useAuthStore();
-  const { addCircle, setCurrentCircle } = useCircleStore();
+  const { addCircle, setCurrentCircle, setCurrentRole } = useCircleStore();
   const [code, setCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -133,6 +133,7 @@ export default function JoinCircleScreen() {
       
       addCircle(circleData);
       setCurrentCircle(circleData);
+      setCurrentRole(profile?.role || 'child');  // Set the role in store
 
       if (typeof window !== 'undefined') {
         window.alert('Felicitări! Te-ai alăturat cercului "' + circleData.name + '"');

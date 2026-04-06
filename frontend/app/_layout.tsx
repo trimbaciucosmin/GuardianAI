@@ -10,10 +10,49 @@ import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
 import { LanguageProvider } from '../lib/i18n';
 import 'react-native-url-polyfill/auto';
 
+// Helper function to load user's circle and role
+async function loadUserCircle(userId: string): Promise<{ circle: any; role: string | null } | null> {
+  try {
+    // Find circles where user is a member - also get their role
+    const { data: memberData, error: memberError } = await supabase
+      .from('circle_members')
+      .select('circle_id, role')
+      .eq('user_id', userId)
+      .limit(1)
+      .single();
+    
+    if (memberError || !memberData) {
+      console.log('[CIRCLE] User not in any circle yet');
+      return null;
+    }
+    
+    // Get the circle details
+    const { data: circleData, error: circleError } = await supabase
+      .from('family_circles')
+      .select('*')
+      .eq('id', memberData.circle_id)
+      .single();
+    
+    if (circleError || !circleData) {
+      console.log('[CIRCLE] Could not load circle details');
+      return null;
+    }
+    
+    console.log('[CIRCLE] Loaded circle:', circleData.name, 'role:', memberData.role);
+    return { 
+      circle: circleData,
+      role: memberData.role || null
+    };
+  } catch (error) {
+    console.log('[CIRCLE] Error loading circle:', error);
+    return null;
+  }
+}
+
 export default function RootLayout() {
   const router = useRouter();
   const { setUser, setProfile, setLoading, isLoading, user } = useAuthStore();
-  const { currentCircle, members } = useCircleStore();
+  const { currentCircle, members, setCurrentCircle, setCurrentRole } = useCircleStore();
   const { 
     globalSOSEvent, 
     sosEventMemberName, 
@@ -93,6 +132,17 @@ export default function RootLayout() {
             if (!profileError && profile) {
               setProfile(profile);
             }
+            
+            // AUTO-LOAD USER'S CIRCLE AND ROLE
+            const circleData = await loadUserCircle(session.user.id);
+            if (circleData) {
+              setCurrentCircle(circleData.circle);
+              setCurrentRole(circleData.role);
+              console.log('[AUTH] Auto-loaded circle and role for user');
+            } else {
+              // User has no circle - use profile role
+              setCurrentRole(profile?.role || null);
+            }
           }
           
           // Success - exit loop
@@ -123,8 +173,19 @@ export default function RootLayout() {
           .eq('user_id', session.user.id)
           .single();
         setProfile(profile);
+        
+        // Also load circle and role on auth change
+        const circleData = await loadUserCircle(session.user.id);
+        if (circleData) {
+          setCurrentCircle(circleData.circle);
+          setCurrentRole(circleData.role);
+        } else {
+          setCurrentRole(profile?.role || null);
+        }
       } else {
         setProfile(null);
+        setCurrentCircle(null);
+        setCurrentRole(null);
       }
     });
 

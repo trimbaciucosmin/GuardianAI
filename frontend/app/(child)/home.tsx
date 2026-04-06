@@ -180,11 +180,23 @@ export default function ChildHomeScreen() {
       try {
         setIsLoadingLocation(true);
         
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
+        // Request foreground permissions first
+        const { status: foregroundStatus } = await Location.requestForegroundPermissionsAsync();
+        if (foregroundStatus !== 'granted') {
           setGpsEnabled(false);
           setIsLoadingLocation(false);
           return;
+        }
+        
+        // Try to get background permissions (for when screen is locked)
+        try {
+          const { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync();
+          if (backgroundStatus === 'granted') {
+            console.log('[CHILD:LOCATION] Background permissions granted');
+          }
+        } catch (bgError) {
+          // Background permissions not available on all platforms
+          console.log('[CHILD:LOCATION] Background permissions not available:', bgError);
         }
 
         const enabled = await Location.hasServicesEnabledAsync();
@@ -226,12 +238,12 @@ export default function ChildHomeScreen() {
 
         setIsLoadingLocation(false);
 
-        // Watch for updates
+        // Watch for updates - more frequent for better tracking
         locationSubscription = await Location.watchPositionAsync(
           {
             accuracy: Location.Accuracy.Balanced,
-            timeInterval: 15000,
-            distanceInterval: 20,
+            timeInterval: 10000,  // Every 10 seconds
+            distanceInterval: 10, // Or every 10 meters
           },
           (newLocation) => {
             setMyLocation(newLocation);

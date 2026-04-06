@@ -257,7 +257,8 @@ export default function MapScreen() {
   const isRecent = (timestamp: string): boolean => {
     const date = new Date(timestamp);
     const now = new Date();
-    return (now.getTime() - date.getTime()) < 5 * 60 * 1000;
+    // Consider online if last seen within 15 minutes (phones in background still send data)
+    return (now.getTime() - date.getTime()) < 15 * 60 * 1000;
   };
 
   const getStatusConfig = (status: string) => {

@@ -28,9 +28,11 @@ export const useAuthStore = create<AuthState>((set) => ({
 interface CircleState {
   circles: FamilyCircle[];
   currentCircle: FamilyCircle | null;
+  currentRole: string | null;
   members: CircleMember[];
   setCircles: (circles: FamilyCircle[]) => void;
   setCurrentCircle: (circle: FamilyCircle | null) => void;
+  setCurrentRole: (role: string | null) => void;
   setMembers: (members: CircleMember[]) => void;
   addCircle: (circle: FamilyCircle) => void;
   removeCircle: (id: string) => void;
@@ -39,9 +41,11 @@ interface CircleState {
 export const useCircleStore = create<CircleState>((set) => ({
   circles: [],
   currentCircle: null,
+  currentRole: null,
   members: [],
   setCircles: (circles) => set({ circles }),
   setCurrentCircle: (currentCircle) => set({ currentCircle }),
+  setCurrentRole: (currentRole) => set({ currentRole }),
   setMembers: (members) => set({ members }),
   addCircle: (circle) => set((state) => ({ circles: [...state.circles, circle] })),
   removeCircle: (id) => set((state) => ({ circles: state.circles.filter((c) => c.id !== id) })),
