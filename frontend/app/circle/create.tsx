@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
   Share,
+  ScrollView,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
@@ -157,55 +158,45 @@ This app lets us share locations and stay safe!`;
   if (createdCircle) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.successContent}>
+        <ScrollView 
+          style={styles.successScrollView}
+          contentContainerStyle={styles.successScrollContent}
+          showsVerticalScrollIndicator={false}
+        >
           {/* Success Icon */}
           <View style={styles.successIcon}>
-            <Ionicons name="checkmark-circle" size={80} color="#10B981" />
+            <Ionicons name="checkmark-circle" size={64} color="#10B981" />
           </View>
           
           <Text style={styles.successTitle}>Circle Created!</Text>
           <Text style={styles.successSubtitle}>
-            Now invite your family members to complete your safety circle
+            Codul de invitație este mai jos
           </Text>
 
           {/* Invite Code Card */}
           <View style={styles.inviteCard}>
-            <Text style={styles.inviteLabel}>Your Invite Code</Text>
+            <Text style={styles.inviteLabel}>Cod de Invitație</Text>
             <TouchableOpacity style={styles.codeBox} onPress={handleCopyCode}>
               <Text style={styles.codeText}>{createdCircle.invite_code}</Text>
               <Ionicons name="copy" size={20} color="#6366F1" />
             </TouchableOpacity>
-            <Text style={styles.inviteHint}>Tap to copy • Share with family members</Text>
+            <Text style={styles.inviteHint}>Apasă pentru a copia</Text>
           </View>
 
-          {/* Incomplete Circle Warning */}
-          <View style={styles.warningBox}>
-            <Ionicons name="information-circle" size={20} color="#F59E0B" />
-            <Text style={styles.warningText}>
-              Your family circle needs at least 2 members to unlock all safety features.
-            </Text>
-          </View>
+          {/* PRIMARY ACTION - Continue to App */}
+          <TouchableOpacity style={styles.continueButton} onPress={handleDone}>
+            <LinearGradient
+              colors={['#10B981', '#059669']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.primaryGradient}
+            >
+              <Ionicons name="home" size={22} color="#FFFFFF" />
+              <Text style={styles.primaryButtonText}>Continuă în Aplicație</Text>
+            </LinearGradient>
+          </TouchableOpacity>
 
-          {/* Share Options */}
-          <View style={styles.shareSection}>
-            <Text style={styles.shareTitle}>Invite via:</Text>
-            <View style={styles.shareButtons}>
-              <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
-                <Ionicons name="share-social" size={24} color="#FFFFFF" />
-                <Text style={styles.shareButtonText}>Share</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
-                <Ionicons name="chatbubble" size={24} color="#FFFFFF" />
-                <Text style={styles.shareButtonText}>Message</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.shareButton} onPress={handleCopyCode}>
-                <Ionicons name="qr-code" size={24} color="#FFFFFF" />
-                <Text style={styles.shareButtonText}>QR Code</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Action Buttons */}
+          {/* Secondary - Invite now */}
           <TouchableOpacity style={styles.primaryButton} onPress={handleShare}>
             <LinearGradient
               colors={['#6366F1', '#8B5CF6']}
@@ -214,22 +205,18 @@ This app lets us share locations and stay safe!`;
               style={styles.primaryGradient}
             >
               <Ionicons name="person-add" size={22} color="#FFFFFF" />
-              <Text style={styles.primaryButtonText}>Invită Membri</Text>
+              <Text style={styles.primaryButtonText}>Invită Acum</Text>
             </LinearGradient>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.continueButton} onPress={handleDone}>
-            <LinearGradient
-              colors={['#10B981', '#059669']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.primaryGradient}
-            >
-              <Ionicons name="arrow-forward" size={22} color="#FFFFFF" />
-              <Text style={styles.primaryButtonText}>Continuă în Aplicație</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
+          {/* Info */}
+          <View style={styles.warningBox}>
+            <Ionicons name="information-circle" size={18} color="#6366F1" />
+            <Text style={styles.infoText}>
+              Poți invita membrii familiei oricând din ecranul Family.
+            </Text>
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -515,18 +502,27 @@ const styles = StyleSheet.create({
   warningBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
     borderRadius: 12,
     padding: 16,
     width: '100%',
     gap: 12,
-    marginBottom: 24,
+    marginTop: 16,
   },
-  warningText: {
+  infoText: {
     flex: 1,
     fontSize: 13,
-    color: '#F59E0B',
+    color: '#94A3B8',
     lineHeight: 18,
+  },
+  successScrollView: {
+    flex: 1,
+  },
+  successScrollContent: {
+    flexGrow: 1,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   shareSection: {
     width: '100%',
