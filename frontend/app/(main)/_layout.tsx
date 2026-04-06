@@ -1,14 +1,71 @@
-import React from 'react';
-import { Tabs } from 'expo-router';
-import { View, StyleSheet } from 'react-native';
+
+Pas 3: Editează al doilea fișier
+Mergi înapoi la: https://github.com/trimbaciucosmin/GuardianAI/tree/main/frontend/app
+Click pe folder (main)
+Click pe fișierul _layout.tsx
+Click pe iconița creion (Edit) din dreapta sus
+Selectează tot (Ctrl+A) și șterge
+Copiază tot textul de mai jos și lipește-l:
+import React, { useEffect, useState } from 'react';
+import { Tabs, useRouter } from 'expo-router';
+import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
+import { useCircleStore, useAuthStore } from '../../lib/store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const CACHED_ROLE_KEY = '@guardian_cached_role';
+const CHILD_ROLES = ['child', 'teen'];
 
 export default function MainLayout() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { currentRole } = useCircleStore();
+  const { user, profile } = useAuthStore();
+  const [accessGranted, setAccessGranted] = useState(false);
+  const [checking, setChecking] = useState(true);
   
   const tabBarHeight = 56 + insets.bottom;
+
+  useEffect(() => {
+    const validateAccess = async () => {
+      const storeRole = currentRole?.toLowerCase()?.trim() || null;
+      const profileRole = profile?.role?.toLowerCase()?.trim() || null;
+      
+      let cachedRole: string | null = null;
+      try {
+        cachedRole = await AsyncStorage.getItem(CACHED_ROLE_KEY);
+        cachedRole = cachedRole?.toLowerCase()?.trim() || null;
+      } catch (e) {
+        console.log('[GUARD:MAIN] Cache read error:', e);
+      }
+      
+      const effectiveRole = storeRole || profileRole || cachedRole;
+      console.log(`[GUARD:MAIN] Role check: store=${storeRole}, profile=${profileRole}, cache=${cachedRole}, effective=${effectiveRole}`);
+      
+      if (effectiveRole && CHILD_ROLES.includes(effectiveRole)) {
+        console.log('[GUARD:MAIN] CHILD detected in parent mode → redirect to /(child)/home');
+        router.replace('/(child)/home');
+        return;
+      }
+      
+      console.log('[GUARD:MAIN] Access granted for parent mode');
+      setAccessGranted(true);
+      setChecking(false);
+    };
+    
+    validateAccess();
+  }, [currentRole, profile?.role, user?.id]);
+
+  if (checking && !accessGranted) {
+    return (
+      <View style={styles.guardLoading}>
+        <ActivityIndicator size="large" color="#6366F1" />
+        <Text style={styles.guardText}>Loading...</Text>
+      </View>
+    );
+  }
 
   return (
     <Tabs
@@ -100,5 +157,16 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 6,
     marginBottom: -6,
+  },
+  guardLoading: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  guardText: {
+    marginTop: 16,
+    color: '#64748B',
+    fontSize: 14,
   },
 });
